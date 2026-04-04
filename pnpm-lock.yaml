@@ -135,6 +135,24 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  packages/three-yakuza:
+    dependencies:
+      '@three-yakuza/gmd-parser':
+        specifier: workspace:*
+        version: link:../gmd-parser
+      '@three-yakuza/gmt-parser':
+        specifier: workspace:*
+        version: link:../gmt-parser
+      '@three-yakuza/par-parser':
+        specifier: workspace:*
+        version: link:../par-parser
+      '@three-yakuza/three-gmd':
+        specifier: workspace:*
+        version: link:../three-gmd
+      '@three-yakuza/three-gmt':
+        specifier: workspace:*
+        version: link:../three-gmt
+
   shared/binary-reader:
     devDependencies:
       tsup:

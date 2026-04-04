@@ -1,0 +1,36 @@
+{
+  "name": "@three-yakuza/three-yakuza",
+  "version": "0.1.1",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": ["dist"],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@three-yakuza/gmt-parser": "workspace:*",
+    "@three-yakuza/gmd-parser": "workspace:*",
+    "@three-yakuza/par-parser": "workspace:*",
+    "@three-yakuza/three-gmt": "workspace:*",
+    "@three-yakuza/three-gmd": "workspace:*"
+  },
+  "peerDependencies": {
+    "three": ">=0.150.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
