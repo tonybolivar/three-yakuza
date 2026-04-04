@@ -2,7 +2,8 @@
  * Three.js Loader for GMD model files.
  */
 import {
-  Loader, FileLoader, Group, Mesh, BufferGeometry, BufferAttribute, Bone, Color,
+  Loader, FileLoader, Group, Mesh, SkinnedMesh, Skeleton,
+  BufferGeometry, BufferAttribute, Bone, Color,
   type Texture,
 } from 'three';
 import { parseGMD, type GMDDocument } from '@three-yakuza/gmd-parser';
@@ -107,9 +108,12 @@ function buildScene(
     const allPositions: number[] = [];
     const allNormals: number[] = [];
     const allUVs: number[] = [];
+    const allBoneIndices: number[] = [];
+    const allBoneWeights: number[] = [];
     const allIndices: number[] = [];
     let vertexOffset = 0;
     let hasNormals = false;
+    let hasSkinning = false;
 
     for (const meshDef of filtered) {
       const vb = doc.vertexBuffers[meshDef.vertexBufferIndex];
@@ -129,6 +133,13 @@ function buildScene(
       if (vb.uvs) {
         for (let i = vStart * 2; i < (vStart + vCount) * 2; i++) {
           allUVs.push(vb.uvs[i]!);
+        }
+      }
+      if (vb.boneIndices && vb.boneWeights) {
+        hasSkinning = true;
+        for (let i = vStart * 4; i < (vStart + vCount) * 4; i++) {
+          allBoneIndices.push(vb.boneIndices[i]!);
+          allBoneWeights.push(vb.boneWeights[i]!);
         }
       }
 
@@ -189,7 +200,17 @@ function buildScene(
       layerDepth,
     });
 
-    const mesh = new Mesh(geometry, material);
+    let mesh: Mesh;
+    if (hasSkinning && bones.length > 0) {
+      geometry.setAttribute('skinIndex', new BufferAttribute(new Uint16Array(allBoneIndices), 4));
+      geometry.setAttribute('skinWeight', new BufferAttribute(new Float32Array(allBoneWeights), 4));
+      const skinnedMesh = new SkinnedMesh(geometry, material);
+      const skeleton = new Skeleton(bones);
+      skinnedMesh.bind(skeleton);
+      mesh = skinnedMesh;
+    } else {
+      mesh = new Mesh(geometry, material);
+    }
     mesh.name = `attr_${attrIdx}`;
     mesh.renderOrder = layerDepth;
     root.add(mesh);
