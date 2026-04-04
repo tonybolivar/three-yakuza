@@ -153,7 +153,10 @@ function buildScene(
       geometry.setAttribute('uv', new BufferAttribute(new Float32Array(allUVs), 2));
     }
     geometry.setIndex(new BufferAttribute(new Uint32Array(allIndices), 1));
-    if (hasNormals) {
+    // Blended shaders (hair, eyelashes) store inverted normals for double-sided
+    // game rendering. Compute outward-facing normals for standard Three.js materials.
+    const isBlended = shaderName.startsWith('s_b') || shaderName.includes('[nrev]');
+    if (hasNormals && !isBlended) {
       geometry.setAttribute('normal', new BufferAttribute(new Float32Array(allNormals), 3));
     } else {
       geometry.computeVertexNormals();
