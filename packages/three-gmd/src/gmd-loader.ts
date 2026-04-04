@@ -216,6 +216,7 @@ function buildScene(
     // Find textures by role
     let diffuseMap: Texture | undefined;
     let normalMap: Texture | undefined;
+    let mtMap: Texture | undefined;
     if (matDef && textures && textures.size > 0) {
       for (const texIdx of matDef.textureIndices) {
         const texName = doc.textures[texIdx];
@@ -226,6 +227,7 @@ function buildScene(
         const suffix = getTextureSuffix(texName);
         if (suffix === 'di' && !diffuseMap) diffuseMap = texture;
         else if (suffix === 'tn' && !normalMap) normalMap = texture;
+        else if (suffix === 'mt' && !mtMap) mtMap = texture;
       }
     }
 
@@ -237,6 +239,7 @@ function buildScene(
     const material = createSEGAMaterial({
       diffuseMap,
       normalMap,
+      mtMap,
       color: matDef ? new Color(matDef.diffuse[0], matDef.diffuse[1], matDef.diffuse[2]) : 0x888888,
       opacity,
       transparent: opacity < 1,
