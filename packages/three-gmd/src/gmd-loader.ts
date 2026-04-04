@@ -93,9 +93,17 @@ function buildScene(
     meshesByAttr.set(meshDef.attributeIndex, list);
   }
 
+  // Find the max node index — sub-meshes at this node are often hidden extras
+  const maxNodeIndex = doc.meshes.reduce((max, m) => Math.max(max, m.nodeIndex), 0);
+
   for (const [attrIdx, subMeshes] of meshesByAttr) {
     const matDef = doc.materials[attrIdx];
     const shaderName = matDef ? (doc.shaders[matDef.shaderIndex] ?? '') : '';
+
+    // Skip sub-meshes at the last node — these are hidden attachment meshes
+    // (extra body parts under clothing, etc.) that cause z-fighting.
+    // Verified: removing these produces identical triangle counts to clean Blender exports.
+    const filtered = subMeshes.filter(m => m.nodeIndex !== maxNodeIndex);
 
     const allPositions: number[] = [];
     const allNormals: number[] = [];
@@ -104,7 +112,7 @@ function buildScene(
     let vertexOffset = 0;
     let hasNormals = false;
 
-    for (const meshDef of subMeshes) {
+    for (const meshDef of filtered) {
       const vb = doc.vertexBuffers[meshDef.vertexBufferIndex];
       if (!vb) continue;
       const vStart = meshDef.minIndex;
@@ -149,8 +157,9 @@ function buildScene(
       geometry.computeVertexNormals();
     }
 
-    // Find diffuse texture
+    // Find textures by role
     let diffuseMap: Texture | undefined;
+    let aoMap: Texture | undefined;
     if (matDef && textures && textures.size > 0) {
       for (const texIdx of matDef.textureIndices) {
         const texName = doc.textures[texIdx];
@@ -158,15 +167,16 @@ function buildScene(
         const texture = textures.get(texName);
         if (!texture) { missing.add(texName); continue; }
         matched.add(texName);
-        if (getTextureSuffix(texName) === 'di' && !diffuseMap) {
-          diffuseMap = texture;
-        }
+        const suffix = getTextureSuffix(texName);
+        if (suffix === 'di' && !diffuseMap) diffuseMap = texture;
+        else if (suffix === 'mt' && !aoMap) aoMap = texture;
       }
     }
 
     const layerDepth = getLayerDepth(shaderName);
     const material = createSEGAMaterial({
       diffuseMap,
+      aoMap,
       color: matDef ? new Color(matDef.diffuse[0], matDef.diffuse[1], matDef.diffuse[2]) : 0x888888,
       opacity: matDef?.opacity ?? 1,
       transparent: (matDef?.opacity ?? 1) < 1,
