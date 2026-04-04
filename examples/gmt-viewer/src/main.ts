@@ -32,16 +32,16 @@ controls.target.set(0, 0.3, 0);
 controls.enableDamping = true;
 controls.update();
 
-// Lighting — PBR needs higher intensity than Phong/Lambert
-scene.add(new THREE.AmbientLight(0xffffff, 1.0));
-const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
-dirLight.position.set(3, 5, 4);
-scene.add(dirLight);
-const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
-fillLight.position.set(-3, 2, -2);
+// Lighting — Blender studio preset (warm key, cool fill, white rim)
+scene.add(new THREE.AmbientLight(0xffffff, 0.1));
+const keyLight = new THREE.DirectionalLight(0xfff4e5, 1.0);
+keyLight.position.set(1, 1, 2);
+scene.add(keyLight);
+const fillLight = new THREE.DirectionalLight(0xe5f0ff, 0.5);
+fillLight.position.set(-1, 0.5, 1);
 scene.add(fillLight);
-const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
-rimLight.position.set(0, 3, -5);
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+rimLight.position.set(0, 1, -2);
 scene.add(rimLight);
 
 // Grid
