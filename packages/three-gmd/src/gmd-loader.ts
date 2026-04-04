@@ -164,7 +164,8 @@ function buildScene(
       for (const texIdx of matDef.textureIndices) {
         const texName = doc.textures[texIdx];
         if (!texName) continue;
-        const texture = textures.get(texName);
+        // Case-insensitive lookup — GMD names are lowercase, PAR filenames may differ
+        const texture = textures.get(texName) ?? textures.get(texName.toLowerCase());
         if (!texture) { missing.add(texName); continue; }
         matched.add(texName);
         const suffix = getTextureSuffix(texName);

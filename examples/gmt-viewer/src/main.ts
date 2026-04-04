@@ -19,6 +19,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.NoToneMapping;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a2e);
@@ -31,15 +32,15 @@ controls.target.set(0, 0.3, 0);
 controls.enableDamping = true;
 controls.update();
 
-// Lighting
-scene.add(new THREE.AmbientLight(0xffffff, 0.4));
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+// Lighting — PBR needs higher intensity than Phong/Lambert
+scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
 dirLight.position.set(3, 5, 4);
 scene.add(dirLight);
-const fillLight = new THREE.DirectionalLight(0xccccff, 0.3);
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
 fillLight.position.set(-3, 2, -2);
 scene.add(fillLight);
-const rimLight = new THREE.DirectionalLight(0xffffff, 0.2);
+const rimLight = new THREE.DirectionalLight(0xffffff, 0.4);
 rimLight.position.set(0, 3, -5);
 scene.add(rimLight);
 
@@ -396,9 +397,16 @@ function loadDDSFromPAR(parBuffer: ArrayBuffer, target: Map<string, THREE.Textur
         ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
       texture.flipY = true;
+
+      // Diffuse textures are sRGB — tag for correct PBR linearization
+      if (file.name.toLowerCase().includes('_di')) {
+        texture.colorSpace = THREE.SRGBColorSpace;
+      }
+
       texture.needsUpdate = true;
 
-      const baseName = file.name.replace(/\.dds$/i, '');
+      // Store lowercase — GMD texture names are lowercase but PAR filenames may differ
+      const baseName = file.name.replace(/\.dds$/i, '').toLowerCase();
       target.set(baseName, texture);
       count++;
     } catch {
