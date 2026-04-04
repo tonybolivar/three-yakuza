@@ -247,17 +247,9 @@ function buildScene(
       layerDepth,
     });
 
-    let mesh: Mesh;
-    if (hasSkinning && bones.length > 0) {
-      geometry.setAttribute('skinIndex', new BufferAttribute(new Uint16Array(allBoneIndices), 4));
-      geometry.setAttribute('skinWeight', new BufferAttribute(new Float32Array(allBoneWeights), 4));
-      const skinnedMesh = new SkinnedMesh(geometry, material);
-      const skeleton = new Skeleton(bones);
-      skinnedMesh.bind(skeleton);
-      mesh = skinnedMesh;
-    } else {
-      mesh = new Mesh(geometry, material);
-    }
+    // SkinnedMesh disabled — bone index mapping between mesh matrix lists and
+    // the global skeleton needs proper implementation. Using static Mesh for now.
+    const mesh = new Mesh(geometry, material);
     mesh.name = `attr_${attrIdx}`;
     mesh.renderOrder = layerDepth;
     root.add(mesh);
