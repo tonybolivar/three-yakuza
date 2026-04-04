@@ -16,6 +16,7 @@ export interface SEGAMaterialOptions {
   opacity?: number;
   side?: Side;
   transparent?: boolean;
+  vertexColors?: boolean;
   layerDepth?: number;
 }
 
@@ -40,6 +41,7 @@ export function createSEGAMaterial(opts: SEGAMaterialOptions): MeshStandardMater
     transparent: opts.transparent ?? false,
     metalness: 0,
     roughness: 0.5,
+    vertexColors: opts.vertexColors ?? false,
   };
   if (opts.diffuseMap) {
     matOpts.map = opts.diffuseMap;

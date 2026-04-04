@@ -123,10 +123,12 @@ function buildScene(
     const allUVs: number[] = [];
     const allBoneIndices: number[] = [];
     const allBoneWeights: number[] = [];
+    const allColors: number[] = [];
     const allIndices: number[] = [];
     let vertexOffset = 0;
     let hasNormals = false;
     let hasSkinning = false;
+    let hasColors = false;
 
     for (const meshDef of filtered) {
       const vb = doc.vertexBuffers[meshDef.vertexBufferIndex];
@@ -146,6 +148,12 @@ function buildScene(
       if (vb.uvs) {
         for (let i = vStart * 2; i < (vStart + vCount) * 2; i++) {
           allUVs.push(vb.uvs[i]!);
+        }
+      }
+      if (vb.colors) {
+        hasColors = true;
+        for (let i = vStart * 4; i < (vStart + vCount) * 4; i++) {
+          allColors.push(vb.colors[i]!);
         }
       }
       if (vb.boneIndices && vb.boneWeights) {
@@ -192,6 +200,9 @@ function buildScene(
     if (allUVs.length > 0) {
       geometry.setAttribute('uv', new BufferAttribute(new Float32Array(allUVs), 2));
     }
+    if (hasColors) {
+      geometry.setAttribute('color', new BufferAttribute(new Float32Array(allColors), 4));
+    }
     geometry.setIndex(new BufferAttribute(new Uint32Array(allIndices), 1));
     // Blended shaders (hair, eyelashes) store inverted normals for double-sided
     // game rendering. Compute outward-facing normals for standard Three.js materials.
@@ -229,6 +240,7 @@ function buildScene(
       color: matDef ? new Color(matDef.diffuse[0], matDef.diffuse[1], matDef.diffuse[2]) : 0x888888,
       opacity,
       transparent: opacity < 1,
+      vertexColors: hasColors,
       layerDepth,
     });
 
