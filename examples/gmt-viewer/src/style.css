@@ -1,0 +1,52 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: monospace;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  overflow: hidden;
+}
+
+#ui {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 16px;
+  border-radius: 8px;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+#ui h1 {
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+
+#ui label {
+  display: block;
+  margin-bottom: 12px;
+}
+
+#ui input[type='file'] {
+  display: block;
+  margin-top: 4px;
+}
+
+#info {
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+#canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}

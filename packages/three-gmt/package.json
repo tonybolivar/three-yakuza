@@ -1,0 +1,35 @@
+{
+  "name": "@three-yakuza/three-gmt",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": ["dist"],
+  "license": "MIT",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@three-yakuza/gmt-parser": "workspace:*"
+  },
+  "peerDependencies": {
+    "three": ">=0.150.0"
+  },
+  "devDependencies": {
+    "three": "^0.175.0",
+    "@types/three": "^0.175.0",
+    "typescript": "^5.8.3",
+    "tsup": "^8.5.0"
+  }
+}

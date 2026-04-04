@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Asset Viewer — three-yakuza</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="ui">
+      <h1>three-yakuza viewer</h1>
+      <label>
+        Common textures (tex_common_w64.par):
+        <input type="file" id="common-input" accept=".par" />
+      </label>
+      <label>
+        Load .par, .gmt, .gmd, or .glb:
+        <input type="file" id="file-input" accept=".gmt,.gmd,.par,.glb,.gltf" />
+      </label>
+      <pre id="info">Load a .par (archive), .gmd (model), or .gmt (animation) file.</pre>
+    </div>
+    <canvas id="canvas"></canvas>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
