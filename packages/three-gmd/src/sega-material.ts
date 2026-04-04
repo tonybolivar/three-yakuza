@@ -31,11 +31,9 @@ export function createSEGAMaterial(opts: SEGAMaterialOptions): MeshStandardMater
   }
   const mat = new MeshStandardMaterial(matOpts);
 
-  if (opts.aoMap) {
-    mat.aoMap = opts.aoMap;
-    mat.aoMapIntensity = 1.0;
-    opts.aoMap.channel = 0;
-  }
+  // _mt is stored for future SEGA shader implementation.
+  // It controls specular intensity (black=matte, white=shiny), NOT ambient occlusion.
+  // Using it as Three.js aoMap causes black squares where _mt is dark.
 
   const depth = opts.layerDepth ?? 0;
   if (depth !== 0) {
