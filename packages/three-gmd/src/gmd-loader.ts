@@ -164,7 +164,6 @@ function buildScene(
       for (const texIdx of matDef.textureIndices) {
         const texName = doc.textures[texIdx];
         if (!texName) continue;
-        // Case-insensitive lookup — GMD names are lowercase, PAR filenames may differ
         const texture = textures.get(texName) ?? textures.get(texName.toLowerCase());
         if (!texture) { missing.add(texName); continue; }
         matched.add(texName);
@@ -173,6 +172,10 @@ function buildScene(
         else if (suffix === 'mt' && !aoMap) aoMap = texture;
       }
     }
+
+    // Skip reflection/environment passes — they render as solid white/flat
+    // without proper environment maps. Detected by having no real _di texture.
+    if (!diffuseMap && shaderName.includes('[ref]')) continue;
 
     const layerDepth = getLayerDepth(shaderName);
     const material = createSEGAMaterial({
