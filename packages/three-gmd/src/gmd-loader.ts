@@ -17,6 +17,14 @@ export interface GMDLoadResult {
 }
 
 export class GMDLoader extends Loader<GMDLoadResult> {
+  private commonTextures: Map<string, Texture> = new Map();
+
+  /** Set common/shared textures (e.g. from tex_common_w64.par) used as fallback. */
+  setCommonTextures(textures: Map<string, Texture>): this {
+    this.commonTextures = textures;
+    return this;
+  }
+
   load(
     url: string,
     onLoad: (result: GMDLoadResult) => void,
@@ -49,7 +57,12 @@ export class GMDLoader extends Loader<GMDLoadResult> {
     const document = parseGMD(buffer);
     const matched = new Set<string>();
     const missing = new Set<string>();
-    const scene = buildScene(document, textures, matched, missing);
+    // Merge: common textures as fallback, provided textures override
+    const merged = new Map(this.commonTextures);
+    if (textures) {
+      for (const [k, v] of textures) merged.set(k, v);
+    }
+    const scene = buildScene(document, merged, matched, missing);
     return {
       document, scene,
       matchedTextures: [...matched],
