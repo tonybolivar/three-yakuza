@@ -20,6 +20,7 @@ renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.NoToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a2e);
@@ -396,9 +397,11 @@ function loadDDSFromPAR(parBuffer: ArrayBuffer, target: Map<string, THREE.Textur
       texture.minFilter = texData.mipmaps.length > 1
         ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
-      texture.flipY = true;
+      // CompressedTexture.flipY defaults to false — correct for DDS top-down storage.
+      // SEGA UVs use DirectX convention (V=0 at top) which matches.
 
-      // Diffuse textures are sRGB — tag for correct PBR linearization
+      // Diffuse textures are sRGB — Three.js uses COMPRESSED_SRGB_S3TC_DXT*_EXT
+      // for hardware decode to linear, then PBR math runs in linear space.
       if (file.name.toLowerCase().includes('_di')) {
         texture.colorSpace = THREE.SRGBColorSpace;
       }
