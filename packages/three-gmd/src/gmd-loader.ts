@@ -156,12 +156,31 @@ function buildScene(
         }
       }
 
-      const indices = doc.indexBuffer.slice(
+      // Triangle list indices
+      const triListIndices = doc.indexBuffer.slice(
         meshDef.triangleListOffset,
         meshDef.triangleListOffset + meshDef.triangleListCount,
       );
-      for (let i = 0; i < indices.length; i++) {
-        allIndices.push(indices[i]! - meshDef.minIndex + vertexOffset);
+      for (let i = 0; i < triListIndices.length; i++) {
+        allIndices.push(triListIndices[i]! - meshDef.minIndex + vertexOffset);
+      }
+
+      // Triangle strip with reset (0xFFFF marks strip boundaries)
+      if (meshDef.resetStripCount > 0) {
+        const strip = doc.indexBuffer.slice(
+          meshDef.resetStripOffset,
+          meshDef.resetStripOffset + meshDef.resetStripCount,
+        );
+        expandTriangleStrip(strip, meshDef.minIndex, vertexOffset, allIndices, true);
+      }
+
+      // Triangle strip without reset (degenerate triangles mark boundaries)
+      if (meshDef.noResetStripCount > 0) {
+        const strip = doc.indexBuffer.slice(
+          meshDef.noResetStripOffset,
+          meshDef.noResetStripOffset + meshDef.noResetStripCount,
+        );
+        expandTriangleStrip(strip, meshDef.minIndex, vertexOffset, allIndices, false);
       }
       vertexOffset += vCount;
     }
@@ -243,6 +262,54 @@ function getTextureSuffix(name: string): string {
  * Determine clothing layer depth from shader name for z-fighting resolution.
  * Parsed from shader brackets — general across all GMD models.
  */
+/**
+ * Expand a triangle strip into a triangle list.
+ * Handles both reset-style (0xFFFF delimiter) and degenerate-style strips.
+ */
+function expandTriangleStrip(
+  strip: Uint16Array,
+  minIndex: number,
+  vertexOffset: number,
+  out: number[],
+  hasReset: boolean,
+): void {
+  let a = 0, b = 0, c = 0;
+  let count = 0;
+
+  for (let i = 0; i < strip.length; i++) {
+    const idx = strip[i]!;
+
+    // Reset marker
+    if (hasReset && idx === 0xffff) {
+      count = 0;
+      continue;
+    }
+
+    c = idx;
+    count++;
+
+    if (count >= 3) {
+      // Skip degenerate triangles (two or more identical vertices)
+      if (a !== b && b !== c && a !== c) {
+        if (count % 2 === 1) {
+          // Odd triangle — normal winding
+          out.push(a - minIndex + vertexOffset);
+          out.push(b - minIndex + vertexOffset);
+          out.push(c - minIndex + vertexOffset);
+        } else {
+          // Even triangle — reversed winding
+          out.push(b - minIndex + vertexOffset);
+          out.push(a - minIndex + vertexOffset);
+          out.push(c - minIndex + vertexOffset);
+        }
+      }
+    }
+
+    a = b;
+    b = c;
+  }
+}
+
 function getLayerDepth(shaderName: string): number {
   if (shaderName.includes('[skin]')) return 4;
   if (shaderName.includes('[mouth]')) return 5;
