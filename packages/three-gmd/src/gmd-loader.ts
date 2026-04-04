@@ -100,10 +100,12 @@ function buildScene(
     const matDef = doc.materials[attrIdx];
     const shaderName = matDef ? (doc.shaders[matDef.shaderIndex] ?? '') : '';
 
-    // Skip sub-meshes at the last node — these are hidden attachment meshes
-    // (extra body parts under clothing, etc.) that cause z-fighting.
-    // Verified: removing these produces identical triangle counts to clean Blender exports.
-    const filtered = subMeshes.filter(m => m.nodeIndex !== maxNodeIndex);
+    // Skip body/skin sub-meshes at the last node — these are hidden body parts
+    // under clothing that cause z-fighting. Clothing/detail meshes are kept.
+    const isSkinShader = shaderName.includes('[skin]');
+    const filtered = subMeshes.filter(m =>
+      !(m.nodeIndex === maxNodeIndex && isSkinShader),
+    );
 
     const allPositions: number[] = [];
     const allNormals: number[] = [];
