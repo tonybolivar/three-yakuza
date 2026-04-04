@@ -100,12 +100,9 @@ function buildScene(
     const matDef = doc.materials[attrIdx];
     const shaderName = matDef ? (doc.shaders[matDef.shaderIndex] ?? '') : '';
 
-    // Skip body/skin sub-meshes at the last node — these are hidden body parts
-    // under clothing that cause z-fighting. Clothing/detail meshes are kept.
-    const isSkinShader = shaderName.includes('[skin]');
-    const filtered = subMeshes.filter(m =>
-      !(m.nodeIndex === maxNodeIndex && isSkinShader),
-    );
+    // Skip all sub-meshes at the last node — these are hidden attachment meshes
+    // (body under clothing, suit/shirt extras). Verified against clean Blender exports.
+    const filtered = subMeshes.filter(m => m.nodeIndex !== maxNodeIndex);
 
     const allPositions: number[] = [];
     const allNormals: number[] = [];
@@ -178,17 +175,17 @@ function buildScene(
       }
     }
 
-    // Skip reflection/environment passes — they render as solid white/flat
-    // without proper environment maps. Detected by having no real _di texture.
-    if (!diffuseMap && shaderName.includes('[ref]')) continue;
+    // Reflection/alpha passes without diffuse textures render as transparent overlays
+    const isRefPass = !diffuseMap && shaderName.includes('[ref]');
+    const opacity = isRefPass ? 0.3 : (matDef?.opacity ?? 1);
 
     const layerDepth = getLayerDepth(shaderName);
     const material = createSEGAMaterial({
       diffuseMap,
       aoMap,
       color: matDef ? new Color(matDef.diffuse[0], matDef.diffuse[1], matDef.diffuse[2]) : 0x888888,
-      opacity: matDef?.opacity ?? 1,
-      transparent: (matDef?.opacity ?? 1) < 1,
+      opacity,
+      transparent: opacity < 1,
       layerDepth,
     });
 
