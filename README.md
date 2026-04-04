@@ -1,6 +1,6 @@
 # `three-yakuza`
 
-Use [Yakuza / Like a Dragon](https://www.sega.com/games/yakuza-0) assets in [three.js](https://threejs.org/)
+Use [Yakuza / Like a Dragon](https://rggstudio.sega.com/) assets in [three.js](https://threejs.org/)
 
 [GitHub Repository](https://github.com/tonybolivar/three-yakuza/) | [Examples](https://github.com/tonybolivar/three-yakuza/tree/main/examples) | [Contributing](CONTRIBUTING.md)
 
