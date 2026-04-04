@@ -182,7 +182,7 @@ function buildScene(
     const layerDepth = getLayerDepth(shaderName);
     const material = createSEGAMaterial({
       diffuseMap,
-      aoMap,
+      mtMap: aoMap,
       color: matDef ? new Color(matDef.diffuse[0], matDef.diffuse[1], matDef.diffuse[2]) : 0x888888,
       opacity,
       transparent: opacity < 1,
