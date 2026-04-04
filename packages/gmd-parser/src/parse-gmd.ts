@@ -24,10 +24,11 @@ export function parseGMD(buffer: ArrayBuffer): GMDDocument {
     throw new Error(`Invalid GMD magic: expected "GSGM", got "${JSON.stringify(magic)}"`);
   }
 
-  // 0x04: endian marker (0x02 = big), 0x05: endian flag (0x01 = big)
-  const endianMarker = br.readUint8();
-  br.skip(1); // endian flag
-  const littleEndian = endianMarker !== 0x02;
+  // 0x04: vertex_endian_check, 0x05: file_endian_check
+  // Values: 0x00 = little-endian, 0x01 or 0x02 = big-endian
+  br.skip(1); // vertex endian (used for vertex data, skip for now)
+  const fileEndian = br.readUint8();
+  const littleEndian = fileEndian === 0;
   if (littleEndian) {
     br = br.withEndianness(true);
   }
