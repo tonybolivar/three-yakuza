@@ -2,7 +2,7 @@
  * Three.js Loader for GMD model files.
  */
 import {
-  Loader, FileLoader, Group, Mesh, SkinnedMesh, Skeleton,
+  Loader, FileLoader, Group, Mesh,
   BufferGeometry, BufferAttribute, Bone, Color,
   type Texture,
 } from 'three';
@@ -121,13 +121,10 @@ function buildScene(
     const allPositions: number[] = [];
     const allNormals: number[] = [];
     const allUVs: number[] = [];
-    const allBoneIndices: number[] = [];
-    const allBoneWeights: number[] = [];
     const allColors: number[] = [];
     const allIndices: number[] = [];
     let vertexOffset = 0;
     let hasNormals = false;
-    let hasSkinning = false;
     let hasColors = false;
 
     for (const meshDef of filtered) {
@@ -154,13 +151,6 @@ function buildScene(
         hasColors = true;
         for (let i = vStart * 4; i < (vStart + vCount) * 4; i++) {
           allColors.push(vb.colors[i]!);
-        }
-      }
-      if (vb.boneIndices && vb.boneWeights) {
-        hasSkinning = true;
-        for (let i = vStart * 4; i < (vStart + vCount) * 4; i++) {
-          allBoneIndices.push(vb.boneIndices[i]!);
-          allBoneWeights.push(vb.boneWeights[i]!);
         }
       }
 
