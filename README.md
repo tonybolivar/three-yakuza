@@ -30,10 +30,19 @@ The first browser-native loader for SEGA's proprietary RGG Studio asset formats.
 
 ## Quick start
 
-### Install
+### Install via npm
 
 ```sh
 npm install three @three-yakuza/three-gmt
+```
+
+### Or clone and build from source
+
+```sh
+git clone https://github.com/tonybolivar/three-yakuza.git
+cd three-yakuza
+pnpm install
+pnpm build
 ```
 
 ### Load and play a GMT animation
