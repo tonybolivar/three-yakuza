@@ -2,8 +2,8 @@
  * Three.js Loader for GMD model files.
  */
 import {
-  Loader, FileLoader, Group, Mesh,
-  BufferGeometry, BufferAttribute, Bone, Color,
+  Loader, FileLoader, Group, Mesh, SkinnedMesh, Skeleton,
+  BufferGeometry, BufferAttribute, Bone, Color, Matrix4,
   type Texture,
 } from 'three';
 import { parseGMD, type GMDDocument } from '@three-yakuza/gmd-parser';
@@ -85,18 +85,27 @@ function buildScene(
     const bone = new Bone();
     bone.name = node.name;
     bone.position.set(node.position[0], node.position[1], node.position[2]);
-    bone.quaternion.set(node.rotation[1], node.rotation[2], node.rotation[3], node.rotation[0]);
+    bone.quaternion.set(node.rotation[0], node.rotation[1], node.rotation[2], node.rotation[3]);
     bone.scale.set(node.scale[0], node.scale[1], node.scale[2]);
     return bone;
   });
 
+  // Build hierarchy from child/sibling linked list.
+  // Field "parentOf" = first child index, "siblingOf" = next sibling index.
   for (const node of doc.nodes) {
-    if (node.parentOf >= 0 && node.parentOf < bones.length) {
-      bones[node.parentOf]!.add(bones[node.index]!);
-    } else {
-      root.add(bones[node.index]!);
+    let childIdx = node.parentOf;
+    while (childIdx >= 0 && childIdx < bones.length) {
+      bones[node.index]!.add(bones[childIdx]!);
+      childIdx = doc.nodes[childIdx]!.siblingOf;
     }
   }
+  // Add root nodes (those not parented by the loop above)
+  for (let i = 0; i < bones.length; i++) {
+    if (!bones[i]!.parent) root.add(bones[i]!);
+  }
+
+  root.updateMatrixWorld(true);
+  const skeleton = new Skeleton(bones, []);
 
   // Group sub-meshes by attribute — one merged geometry per attribute
   const meshesByAttr = new Map<number, typeof doc.meshes[number][]>();
@@ -126,6 +135,9 @@ function buildScene(
     let vertexOffset = 0;
     let hasNormals = false;
     let hasColors = false;
+    const allSkinIndices: number[] = [];
+    const allSkinWeights: number[] = [];
+    let hasBones = false;
 
     for (const meshDef of filtered) {
       const vb = doc.vertexBuffers[meshDef.vertexBufferIndex];
@@ -151,6 +163,30 @@ function buildScene(
         hasColors = true;
         for (let i = vStart * 4; i < (vStart + vCount) * 4; i++) {
           allColors.push(vb.colors[i]!);
+        }
+      }
+
+      // Bone data — remap local indices through meshMatrixList
+      if (vb.boneIndices && vb.boneWeights && meshDef.matrixListLength > 0) {
+        hasBones = true;
+        const mlOffset = meshDef.matrixListOffset;
+        // meshMatrixList format: [uint8 count] [uint8 × count bone indices]
+        for (let v = vStart; v < vStart + vCount; v++) {
+          for (let j = 0; j < 4; j++) {
+            const localIdx = vb.boneIndices[v * 4 + j]!;
+            const weight = vb.boneWeights[v * 4 + j]!;
+            if (weight > 0 && localIdx < meshDef.matrixListLength) {
+              allSkinIndices.push(doc.meshMatrixList[mlOffset + 1 + localIdx]!);
+            } else {
+              allSkinIndices.push(0);
+            }
+            allSkinWeights.push(weight);
+          }
+        }
+      } else if (hasBones) {
+        for (let v = 0; v < vCount * 4; v++) {
+          allSkinIndices.push(0);
+          allSkinWeights.push(0);
         }
       }
 
@@ -192,6 +228,10 @@ function buildScene(
     }
     if (hasColors) {
       geometry.setAttribute('color', new BufferAttribute(new Float32Array(allColors), 4));
+    }
+    if (hasBones) {
+      geometry.setAttribute('skinIndex', new BufferAttribute(new Uint16Array(allSkinIndices), 4));
+      geometry.setAttribute('skinWeight', new BufferAttribute(new Float32Array(allSkinWeights), 4));
     }
     geometry.setIndex(new BufferAttribute(new Uint32Array(allIndices), 1));
     // Blended shaders (hair, eyelashes) store inverted normals for double-sided
@@ -237,12 +277,18 @@ function buildScene(
       layerDepth,
     });
 
-    // SkinnedMesh disabled — bone index mapping between mesh matrix lists and
-    // the global skeleton needs proper implementation. Using static Mesh for now.
-    const mesh = new Mesh(geometry, material);
-    mesh.name = `attr_${attrIdx}`;
-    mesh.renderOrder = layerDepth;
-    root.add(mesh);
+    let mesh3d: Mesh;
+    if (hasBones) {
+      const sm = new SkinnedMesh(geometry, material);
+      sm.bind(skeleton, new Matrix4());
+      sm.frustumCulled = false;
+      mesh3d = sm;
+    } else {
+      mesh3d = new Mesh(geometry, material);
+    }
+    mesh3d.name = `attr_${attrIdx}`;
+    mesh3d.renderOrder = layerDepth;
+    root.add(mesh3d);
   }
 
   return root;

@@ -46,8 +46,8 @@ function buildSyntheticGMT(): ArrayBuffer {
   dv.setUint32(0x34, 0x80, false);  // animations_offset
   dv.setUint32(0x38, 1, false);    // graphs_count = 1
   dv.setUint32(0x3c, 0xc0, false);  // graphs_offset
-  dv.setUint32(0x40, 0, false);    // graph_data_size (unused by parser)
-  dv.setUint32(0x44, 0, false);    // graph_data_offset (unused by parser)
+  dv.setUint32(0x40, 10, false);   // graph_data_size
+  dv.setUint32(0x44, 0xc0, false); // graph_data_offset (where frame data lives)
   dv.setUint32(0x48, 2, false);    // strings_count = 2
   dv.setUint32(0x4c, 0xe0, false);  // strings_offset
   dv.setUint32(0x50, 1, false);    // bone_groups_count = 1

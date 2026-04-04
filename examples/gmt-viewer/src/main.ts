@@ -50,6 +50,7 @@ scene.add(new THREE.GridHelper(10, 20, 0x333344, 0x222233));
 
 const clock = new THREE.Clock();
 let mixer: THREE.AnimationMixer | null = null;
+let modelScene: THREE.Group | null = null;
 
 const gmtLoader = new GMTLoader();
 const gmdLoader = new GMDLoader();
@@ -113,8 +114,14 @@ function loadPAR(buffer: ArrayBuffer, filename: string): void {
   const gmtFiles = allFiles.filter(f => f.path.endsWith('.gmt'));
   const ddsFiles = allFiles.filter(f => f.path.endsWith('.dds'));
 
-  clearScene();
-  mixer = null;
+  // If this PAR has a GMD, it's a model PAR — clear everything.
+  // If it only has GMT, it's a motion PAR — keep existing model.
+  const isMotionOnly = gmdFiles.length === 0 && gmtFiles.length > 0;
+  if (!isMotionOnly) {
+    clearScene();
+    mixer = null;
+    modelScene = null;
+  }
 
   // Build texture map: common textures as fallback, character textures override
   const textureMap = new Map<string, THREE.Texture>(commonTextureMap);
@@ -122,8 +129,6 @@ function loadPAR(buffer: ArrayBuffer, filename: string): void {
 
   lines.push(`Textures: ${charLoaded} from PAR + ${commonTextureMap.size} common (${textureMap.size} total)`);
   lines.push('');
-
-  let modelScene: THREE.Group | null = null;
 
   // Load first GMD as the model, with textures
   if (gmdFiles.length > 0) {
@@ -184,8 +189,8 @@ function loadPAR(buffer: ArrayBuffer, filename: string): void {
           totalClips++;
         }
 
-        // Play first animation
-        if (gmtResult.animations.length > 0 && totalClips <= gmtResult.animations.length) {
+        // Play first animation (skip face GMTs — they need special handling)
+        if (!gmtResult.document.isFaceGmt && gmtResult.animations.length > 0 && totalClips <= gmtResult.animations.length) {
           mixer.clipAction(gmtResult.animations[0]!).play();
         }
 
@@ -257,31 +262,38 @@ function loadGMT(buffer: ArrayBuffer, filename: string): void {
   ];
   for (const anim of doc.animations) {
     lines.push(`  [${anim.name}] ${anim.startFrame}-${anim.endFrame} @ ${anim.frameRate}fps, ${anim.bones.size} bones`);
+    lines.push(`    bones: ${[...anim.bones.keys()].slice(0, 10).join(', ')}${anim.bones.size > 10 ? '...' : ''}`);
   }
   lines.push('', `Clips: ${result.animations.length}`);
   for (const clip of result.animations) {
     lines.push(`  ${clip.name}: ${clip.duration.toFixed(2)}s, ${clip.tracks.length} tracks`);
   }
-  infoEl.textContent = lines.join('\n');
 
-  const group = new THREE.Group();
-  group.name = 'animTarget';
-  for (const anim of doc.animations) {
-    for (const boneName of anim.bones.keys()) {
-      if (!group.getObjectByName(boneName)) {
-        const obj = new THREE.Object3D();
-        obj.name = boneName;
-        group.add(obj);
+  // Apply to existing model if one is loaded, otherwise create standalone target
+  const target = modelScene ?? (() => {
+    const group = new THREE.Group();
+    group.name = 'animTarget';
+    for (const anim of doc.animations) {
+      for (const boneName of anim.bones.keys()) {
+        if (!group.getObjectByName(boneName)) {
+          const obj = new THREE.Object3D();
+          obj.name = boneName;
+          group.add(obj);
+        }
       }
     }
-  }
+    clearScene();
+    scene.add(group);
+    return group;
+  })();
 
-  clearScene();
-  scene.add(group);
-  mixer = new THREE.AnimationMixer(group);
+  mixer = new THREE.AnimationMixer(target);
   if (result.animations.length > 0) {
     mixer.clipAction(result.animations[0]!).play();
+    lines.push('', modelScene ? 'Playing on loaded model.' : 'Playing standalone (no model loaded).');
   }
+
+  infoEl.textContent = lines.join('\n');
 }
 
 function loadGMD(buffer: ArrayBuffer, filename: string): void {
@@ -309,8 +321,9 @@ function loadGMD(buffer: ArrayBuffer, filename: string): void {
   infoEl.textContent = lines.join('\n');
 
   clearScene();
-  scene.add(result.scene);
-  fitCamera(result.scene);
+  modelScene = result.scene;
+  scene.add(modelScene);
+  fitCamera(modelScene);
   mixer = null;
 }
 
@@ -418,6 +431,28 @@ function loadDDSFromPAR(parBuffer: ArrayBuffer, target: Map<string, THREE.Textur
   }
   return count;
 }
+
+// -- Keyboard: Space = pause/resume animation, D = dump bone state --
+let animPaused = false;
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    animPaused = !animPaused;
+    if (mixer) mixer.timeScale = animPaused ? 0 : 1;
+    console.log(`Animation ${animPaused ? 'PAUSED' : 'PLAYING'}`);
+  }
+  if (e.code === 'KeyD' && modelScene) {
+    console.group('[Dump] Bone world positions at current frame');
+    modelScene.traverse((obj) => {
+      if (obj.type === 'Bone') {
+        const wx = obj.matrixWorld.elements[12].toFixed(3);
+        const wy = obj.matrixWorld.elements[13].toFixed(3);
+        const wz = obj.matrixWorld.elements[14].toFixed(3);
+        console.log(`  ${obj.name}  world=(${wx},${wy},${wz})  local=(${obj.position.x.toFixed(3)},${obj.position.y.toFixed(3)},${obj.position.z.toFixed(3)})`);
+      }
+    });
+    console.groupEnd();
+  }
+});
 
 // -- Render loop --
 function animate(): void {

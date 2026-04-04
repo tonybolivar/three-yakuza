@@ -25,7 +25,8 @@ export function parseGMT(buffer: ArrayBuffer): GMTDocument {
   br.seek(header.animationOffset);
   const rawAnims = parseAnimations(br, header.animationCount);
 
-  br.seek(header.graphOffset);
+  // graphOffset contains uint32 index pointers; actual frame data is at graphDataOffset
+  br.seek(header.graphDataOffset);
   const graphs = parseGraphs(br, header.graphCount);
 
   br.seek(header.stringOffset);

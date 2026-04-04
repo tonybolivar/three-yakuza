@@ -10,6 +10,8 @@ export interface GMDDocument {
   readonly matrices: readonly Float32Array[];
   readonly vertexBuffers: readonly GMDVertexBuffer[];
   readonly indexBuffer: Uint16Array;
+  /** Raw mesh matrix list bytes — uint8 bone index mapping per mesh. */
+  readonly meshMatrixList: Uint8Array;
 }
 
 export interface GMDVersion {
@@ -20,7 +22,9 @@ export interface GMDVersion {
 /** A node in the model hierarchy (bone or mesh transform). */
 export interface GMDNode {
   readonly index: number;
+  /** First child node index (-1 if leaf). Forms a child/sibling linked list. */
   readonly parentOf: number;
+  /** Next sibling node index (-1 if last sibling). */
   readonly siblingOf: number;
   readonly objectIndex: number;
   readonly matrixIndex: number;

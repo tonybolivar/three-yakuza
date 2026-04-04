@@ -62,6 +62,8 @@ export function parseGMD(buffer: ArrayBuffer): GMDDocument {
   const shaderArr = readArrayPointer(br);
   const nodeNameArr = readArrayPointer(br);
   const indexData = readArrayPointer(br);
+  readSizedPointer(br); // objectDrawlistBytes (unused)
+  const meshMatrixlistData = readSizedPointer(br);
 
   // Skip remaining header fields (draw lists, matrix lists, bounds, unknowns, flags)
   // These vary by version but we don't need them for basic mesh extraction
@@ -148,6 +150,10 @@ export function parseGMD(buffer: ArrayBuffer): GMDDocument {
     indexBuffer[i] = br.readUint16();
   }
 
+  // Mesh matrix list — uint8 bone index mapping
+  br.seek(meshMatrixlistData.offset);
+  const meshMatrixList = br.readBytes(meshMatrixlistData.size);
+
   return {
     name,
     version,
@@ -159,6 +165,7 @@ export function parseGMD(buffer: ArrayBuffer): GMDDocument {
     matrices,
     vertexBuffers,
     indexBuffer,
+    meshMatrixList,
   };
 }
 
