@@ -6,6 +6,8 @@ Use [Yakuza / Like a Dragon](https://rggstudio.sega.com/) assets in [three.js](h
 
 ![Viewer Screenshot](docs/media/viewer-screenshot.png)
 
+> **Early development** -- This project is a work in progress. Model rendering has known issues including facial shading artifacts, missing material features, and incomplete facial animation blending. Contributions welcome!
+
 ## What is this?
 
 The first browser-native loader for SEGA's proprietary RGG Studio asset formats. Parse and render Yakuza series models, animations, and textures directly in Three.js with no Blender pipeline required.

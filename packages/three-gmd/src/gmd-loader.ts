@@ -116,8 +116,6 @@ function buildScene(
     meshesByAttr.set(meshDef.attributeIndex, list);
   }
 
-  // Find the max node index - sub-meshes at this node are often hidden extras
-  const maxNodeIndex = doc.meshes.reduce((max, m) => Math.max(max, m.nodeIndex), 0);
 
   interface PendingMesh {
     geometry: BufferGeometry;
@@ -133,9 +131,12 @@ function buildScene(
     const matDef = doc.materials[attrIdx];
     const shaderName = matDef ? (doc.shaders[matDef.shaderIndex] ?? '') : '';
 
-    // Skip all sub-meshes at the last node - these are hidden attachment meshes
-    // (body under clothing, suit/shirt extras). Verified against clean Blender exports.
-    const filtered = subMeshes.filter(m => m.nodeIndex !== maxNodeIndex);
+    // Only keep LOD 0 meshes. Lower LOD meshes ([l2], [l3]) are simplified
+    // duplicates that should not render alongside the high-detail geometry.
+    const filtered = subMeshes.filter(m => {
+      const nodeName = doc.nodes[m.nodeIndex]?.name ?? '';
+      return nodeName.startsWith('[l0]') || !nodeName.startsWith('[l');
+    });
 
     // Compute the unified vertex range across all sub-meshes sharing this VB.
     // Sub-meshes are split by bone palette but share a single contiguous vertex
