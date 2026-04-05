@@ -26,6 +26,11 @@ export class GMTAnimationClipBuilder {
     const tracks: KeyframeTrack[] = [];
 
     for (const [boneName, bone] of animation.bones) {
+      // Skip pose labels (no curves) and face GMT metadata bones
+      // that aren't in the skeleton (non, root, head, lip, param*, am_*)
+      if (bone.curves.length === 0) continue;
+      if (this.isFaceGmt && !boneName.startsWith('_')) continue;
+
       const locationCurves = bone.curves.filter(
         (c) => c.type === GMTCurveType.LOCATION,
       );
