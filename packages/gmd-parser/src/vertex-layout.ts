@@ -160,7 +160,8 @@ export function extractVertexBuffer(
       positions[v * 3 + 2] = vals[2]!;
     }
 
-    // Normal — renormalize after snorm8 quantization. No negation needed.
+    // Normal — renormalize after snorm8 quantization.
+    // Stored normals point outward (correct). No negation needed.
     if (normalComp && normals) {
       const vals = readComponent(br, vertexStart + normalComp.offset, normalComp, littleEndian);
       let nx = normalComp.format === 2 ? vals[0]! * 2 - 1 : vals[0]!;

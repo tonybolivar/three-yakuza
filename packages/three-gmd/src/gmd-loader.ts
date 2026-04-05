@@ -270,9 +270,9 @@ function buildScene(
       geometry.setAttribute('skinWeight', new BufferAttribute(new Float32Array(allSkinWeights), 4));
     }
     geometry.setIndex(new BufferAttribute(new Uint32Array(allIndices), 1));
-    // Head-area meshes: stored normals don't work with Three.js (handedness issue).
+    // Head-area meshes: stored normals have smoothness issues with Three.js.
     // Use computeVertexNormals() which produces correct smooth results.
-    // Body/clothing: stored normals work correctly with FrontSide.
+    // Body/clothing: stored normals work correctly.
     const needsComputedNormals = shaderName.includes('[skin]')
       || shaderName.includes('[mouth]')
       || shaderName.includes('[eye]')
