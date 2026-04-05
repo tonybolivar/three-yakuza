@@ -4,9 +4,13 @@ Use [Yakuza / Like a Dragon](https://rggstudio.sega.com/) assets in [three.js](h
 
 [GitHub Repository](https://github.com/tonybolivar/three-yakuza/) | [Examples](https://github.com/tonybolivar/three-yakuza/tree/main/examples) | [Contributing](CONTRIBUTING.md)
 
+![Viewer Screenshot](docs/media/viewer-screenshot.png)
+
 ## What is this?
 
-The first browser-native loader for SEGA's proprietary RGG Studio asset formats. Parse and render Yakuza series animations, models, and cameras directly in Three.js with no Blender pipeline required.
+The first browser-native loader for SEGA's proprietary RGG Studio asset formats. Parse and render Yakuza series models, animations, and textures directly in Three.js with no Blender pipeline required.
+
+![Animation Demo](docs/media/animation-demo.gif)
 
 ## Packages
 
@@ -16,7 +20,7 @@ The first browser-native loader for SEGA's proprietary RGG Studio asset formats.
 | [`@three-yakuza/gmd-parser`](packages/gmd-parser) | Parse GMD model files (zero dependencies) |
 | [`@three-yakuza/par-parser`](packages/par-parser) | Unpack PAR archives + SLLZ decompression (zero dependencies) |
 | [`@three-yakuza/three-gmt`](packages/three-gmt) | Three.js GMT animation loader |
-| [`@three-yakuza/three-gmd`](packages/three-gmd) | Three.js GMD model loader |
+| [`@three-yakuza/three-gmd`](packages/three-gmd) | Three.js GMD model loader with PBR materials |
 
 ## Supported formats
 
@@ -25,15 +29,26 @@ The first browser-native loader for SEGA's proprietary RGG Studio asset formats.
 | GMT | `.gmt` | Skeletal animations (body, face) | Y0, YK1, Y3-5, Kenzan, Ishin |
 | CMT | `.cmt` | Camera animations | Y0, YK1, Y3-5, Kenzan, Ishin |
 | IFA | `.ifa` | Facial pose data | Y0, YK1, Y3-5 |
-| GMD | `.gmd` | Character/stage models | Y0, YK1, Y3-5 |
+| GMD | `.gmd` | Character/stage models with skinning | Y0, YK1, Y3-5 |
 | PAR | `.par` | Asset archives | All Old Engine titles |
+| DDS | `.dds` | Textures (DXT1/DXT5) | All Old Engine titles |
+
+## Features
+
+- Full skinned mesh rendering with bone animation
+- PBR materials with SEGA-specific shader patches (green normal maps, multi-maps)
+- Texture slot-based material assignment (diffuse, normal, multi-map, repeat textures)
+- Bone palette vertex welding for seamless mesh rendering
+- Cross-mesh normal smoothing at material boundaries
+- Animation player with timeline scrubber and speed control
+- WebM recording and PNG sequence export
 
 ## Quick start
 
 ### Install via npm
 
 ```sh
-npm install three @three-yakuza/three-gmt
+npm install three @three-yakuza/three-gmt @three-yakuza/three-gmd
 ```
 
 ### Or clone and build from source
@@ -45,38 +60,39 @@ pnpm install
 pnpm build
 ```
 
-### Load and play a GMT animation
-
-```typescript
-import * as THREE from 'three';
-import { GMTLoader } from '@three-yakuza/three-gmt';
-
-const loader = new GMTLoader();
-const gmt = await loader.loadAsync('/animations/karaoke_baka_mitai.gmt');
-
-// Clips use original SEGA bone names (center, kosi, mune_1, etc.)
-const mixer = new THREE.AnimationMixer(yourSkinnedMesh);
-mixer.clipAction(gmt.animations[0]).play();
-```
-
 ### Load a GMD model from a PAR archive
 
 ```typescript
 import { parsePAR, extractFile } from '@three-yakuza/par-parser';
 import { GMDLoader } from '@three-yakuza/three-gmd';
 
-// Load the PAR archive
+// Load common textures first (shared across characters)
+const commonPar = await fetch('/data/tex_common_w64.par').then(r => r.arrayBuffer());
+const loader = new GMDLoader();
+loader.setCommonTextures(loadDDSFromPAR(commonPar));
+
+// Load character PAR
 const parBuffer = await fetch('/data/c_cm_kiryu/mesh.par').then(r => r.arrayBuffer());
 const archive = parsePAR(parBuffer);
 
 // Extract and parse the GMD model
 const gmdFile = archive.files.find(f => f.name.endsWith('.gmd'));
 const gmdData = extractFile(parBuffer, gmdFile);
-const loader = new GMDLoader();
 const result = loader.parse(gmdData.buffer);
 
-// Add to scene
-scene.add(result.scene);
+scene.add(result.scene); // SkinnedMesh with skeleton
+```
+
+### Load and play a GMT animation
+
+```typescript
+import { GMTLoader } from '@three-yakuza/three-gmt';
+
+const gmtLoader = new GMTLoader();
+const gmt = await gmtLoader.loadAsync('/animations/p_krc_wpc_atk_pickup_l.gmt');
+
+const mixer = new THREE.AnimationMixer(result.scene);
+mixer.clipAction(gmt.animations[0]).play();
 ```
 
 ### Parser only (no Three.js)
@@ -97,19 +113,41 @@ console.log(gmt.animations[0].frameRate);  // e.g. 30.0
 console.log(gmt.animations[0].bones);      // Map<string, GMTBone>
 ```
 
-### Full pipeline: PAR -> GMD + GMT + DDS textures
+## Viewer
 
-See [`examples/gmt-viewer`](examples/gmt-viewer) for a complete browser demo that loads PAR archives, extracts models and animations, parses DDS textures, and renders everything in Three.js with orbit controls.
+The [`examples/gmt-viewer`](examples/gmt-viewer) is a full-featured browser viewer with:
+
+- PAR archive loading (auto-extracts models, textures, animations)
+- Animation clip list with click-to-play
+- Timeline scrubber with playback speed control
+- Orbit camera + WASD free-fly mode (Tab to toggle)
+- WebM video recording and PNG sequence export
+- Common texture loading (tex_common_w64.par)
+
+```sh
+cd examples/gmt-viewer
+pnpm dev
+```
+
+## Texture formats
+
+The SEGA Old Engine uses several texture types identified by suffix:
+
+| Suffix | Purpose |
+| --- | --- |
+| `_di` | Diffuse / albedo (alpha = transparency) |
+| `_tn` | Normal map (green channel format: X in alpha, Y in green, Z derived) |
+| `_mt` | Multi-map: R=metallic, G=ambient occlusion, B=glossiness |
+| `_rd` | Repeating diffuse overlay (secondary UV) |
+| `_rt` | Repeating normal map (secondary UV) |
+| `_ts` | Wrinkle / toon-subsurface map |
+| `_tr` | Subsurface scattering map |
 
 ## Bone naming
 
 Animation clips use original SEGA bone names as-is. This library does **not** perform bone retargeting. If applying GMT animations to non-Yakuza models (MMD, VRM, custom rigs), you must map bone names in your own code.
 
-Common SEGA bone names: `center`, `kosi`, `mune_1`, `mune_2`, `kubi`, `face`, `kata_r`, `ude_r_1`, `ude_r_2`, `te_r`, `kata_l`, `ude_l_1`, `ude_l_2`, `te_l`, `asi_r_1`, `asi_r_2`, `asi_l_1`, `asi_l_2`
-
-## Use with WebGPURenderer
-
-The animation system (`AnimationClip`, `AnimationMixer`, `KeyframeTrack`) is renderer-agnostic. Works with both `WebGLRenderer` and `WebGPURenderer` with no changes.
+Common SEGA bone names: `center_c_n`, `kosi_c_n`, `mune_c_n`, `kubi_c_n`, `face_c_n`, `kata_r_n`, `ude_r_1_n`, `te_r_n`, `asi1_r_n`
 
 ## Credits
 
@@ -118,6 +156,8 @@ Parser logic ported from:
 - [`gmt_lib`](https://github.com/SutandoTsukai181/gmt_lib) by SutandoTsukai181 (MIT) - GMT/CMT/IFA parsing
 - [`Yakuza-PAR-py`](https://github.com/SutandoTsukai181/Yakuza-PAR-py) by SutandoTsukai181 (MIT) - PAR archive unpacking
 - [`yk_gmd_io`](https://github.com/theturboturnip/yk_gmd_io) by theturboturnip (MIT) - GMD model parsing
+
+Texture format documentation from the Yakuza modding community.
 
 ## Contributing
 
