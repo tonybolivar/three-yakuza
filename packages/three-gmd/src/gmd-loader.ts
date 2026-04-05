@@ -315,27 +315,38 @@ function buildScene(
       }
     }
 
-    // Reflection/alpha passes without diffuse textures render as transparent overlays
+    // Debug: log missing textures for eye/head meshes
+    if (missing.size > 0 && (shaderName.includes('[eye]') || shaderName.includes('[iris]'))) {
+      console.warn(`[GMD] attr_${attrIdx} (${shaderName}) missing textures:`, [...missing]);
+    }
+
+    // Material configuration based on shader type
     const isRefPass = !diffuseMap && shaderName.includes('[ref]');
+    const isBlended = shaderName.startsWith('s_b');  // eyeshadow, eyelashes, facial hair
+    const isAlphaRef = shaderName.includes('[aref]'); // eye surface (alpha-tested)
+    const needsDoubleSide = shaderName.includes('[mouth]') || shaderName.includes('[iris]');
+
     const opacity = isRefPass ? 0.3 : (matDef?.opacity ?? 1);
+    const isTransparent = opacity < 1 || isBlended || isRefPass;
 
     const layerDepth = getLayerDepth(shaderName);
-    // Mouth/eye interior geometry faces inward — needs DoubleSide to be visible
-    const needsDoubleSide = shaderName.includes('[mouth]')
-      || shaderName.includes('[iris]');
     const material = createSEGAMaterial({
       diffuseMap,
       normalMap,
       mtMap,
       color: matDef ? new Color(matDef.diffuse[0], matDef.diffuse[1], matDef.diffuse[2]) : 0x888888,
       opacity,
-      transparent: opacity < 1,
+      transparent: isTransparent,
       vertexColors: hasColors,
       layerDepth,
       ...(needsDoubleSide ? { side: 2 } : {}), // 2 = DoubleSide
     });
-    if (shaderName.includes('[aref]')) {
-      material.alphaTest = 0.5;
+    if (isAlphaRef) {
+      material.alphaTest = 0.1; // low threshold to cut out transparent areas
+      material.transparent = false;
+    }
+    if (isBlended) {
+      material.depthWrite = false; // blended overlays shouldn't occlude
     }
 
     pendingMeshes.push({ geometry, material, hasBones, attrIdx, layerDepth, needsComputedNormals });
@@ -509,8 +520,11 @@ function weldVertices(
 }
 
 function getLayerDepth(shaderName: string): number {
+  if (shaderName.includes('[iris]')) return 1;   // iris renders first (behind eye surface)
+  if (shaderName.includes('[eye]')) return 2;     // eye surface renders after iris
   if (shaderName.includes('[skin]')) return 4;
   if (shaderName.includes('[mouth]')) return 5;
+  if (shaderName.includes('[ref]')) return 6;     // reflections on top
   if (shaderName.includes('[rd]')) return -2;
   if (shaderName.includes('[rs]') || shaderName.includes('[rt]')) return -1;
   return 0;
