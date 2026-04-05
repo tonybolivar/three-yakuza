@@ -189,9 +189,13 @@ function loadPAR(buffer: ArrayBuffer, filename: string): void {
           totalClips++;
         }
 
-        // Play first animation (skip face GMTs — they need special handling)
-        if (!gmtResult.document.isFaceGmt && gmtResult.animations.length > 0 && totalClips <= gmtResult.animations.length) {
-          mixer.clipAction(gmtResult.animations[0]!).play();
+        if (gmtResult.animations.length > 0 && totalClips <= gmtResult.animations.length) {
+          if (gmtResult.document.isFaceGmt) {
+            // Face GMT disabled — additive deltas distort face in bind pose
+            console.log('[GMT] Skipping face animation:', gmtResult.document.name);
+          } else {
+            mixer.clipAction(gmtResult.animations[0]!).play();
+          }
         }
 
         lines.push(`Loaded animation: ${gmtResult.document.name} (${gmtResult.animations.length} clips)`);
@@ -289,7 +293,11 @@ function loadGMT(buffer: ArrayBuffer, filename: string): void {
 
   mixer = new THREE.AnimationMixer(target);
   if (result.animations.length > 0) {
-    mixer.clipAction(result.animations[0]!).play();
+    const action = mixer.clipAction(result.animations[0]!);
+    if (doc.isFaceGmt) {
+      action.blendMode = THREE.AdditiveAnimationBlendMode;
+    }
+    action.play();
     lines.push('', modelScene ? 'Playing on loaded model.' : 'Playing standalone (no model loaded).');
   }
 
@@ -432,15 +440,34 @@ function loadDDSFromPAR(parBuffer: ArrayBuffer, target: Map<string, THREE.Textur
   return count;
 }
 
-// -- Keyboard: Space = pause/resume animation, D = dump bone state --
-let animPaused = false;
+// -- Free camera (WASD + mouse) --
+const keysDown = new Set<string>();
+const moveSpeed = 2.0;
+let freeCam = false;
+
 window.addEventListener('keydown', (e) => {
+  keysDown.add(e.code);
+
   if (e.code === 'Space') {
     animPaused = !animPaused;
     if (mixer) mixer.timeScale = animPaused ? 0 : 1;
-    console.log(`Animation ${animPaused ? 'PAUSED' : 'PLAYING'}`);
   }
-  if (e.code === 'KeyD' && modelScene) {
+  if (e.code === 'Tab') {
+    e.preventDefault();
+    freeCam = !freeCam;
+    controls.enabled = !freeCam;
+    if (freeCam) {
+      canvas.requestPointerLock();
+    } else {
+      document.exitPointerLock();
+      // Sync orbit target to where the camera is now looking
+      const dir = new THREE.Vector3();
+      camera.getWorldDirection(dir);
+      controls.target.copy(camera.position).addScaledVector(dir, 2);
+      controls.update();
+    }
+  }
+  if (e.code === 'KeyD' && !freeCam && modelScene) {
     console.group('[Dump] Bone world positions at current frame');
     modelScene.traverse((obj) => {
       if (obj.type === 'Bone') {
@@ -453,13 +480,48 @@ window.addEventListener('keydown', (e) => {
     console.groupEnd();
   }
 });
+window.addEventListener('keyup', (e) => keysDown.delete(e.code));
+
+let animPaused = false;
+const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+canvas.addEventListener('mousemove', (e) => {
+  if (!freeCam || document.pointerLockElement !== canvas) return;
+  euler.setFromQuaternion(camera.quaternion);
+  euler.y -= e.movementX * 0.002;
+  euler.x -= e.movementY * 0.002;
+  euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+  camera.quaternion.setFromEuler(euler);
+});
+document.addEventListener('pointerlockchange', () => {
+  if (document.pointerLockElement !== canvas && freeCam) {
+    freeCam = false;
+    controls.enabled = true;
+  }
+});
+
+function updateFreeCam(dt: number): void {
+  if (!freeCam) return;
+  const speed = moveSpeed * dt;
+  const dir = new THREE.Vector3();
+  const right = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  right.crossVectors(dir, camera.up).normalize();
+
+  if (keysDown.has('KeyW')) camera.position.addScaledVector(dir, speed);
+  if (keysDown.has('KeyS')) camera.position.addScaledVector(dir, -speed);
+  if (keysDown.has('KeyA')) camera.position.addScaledVector(right, -speed);
+  if (keysDown.has('KeyD')) camera.position.addScaledVector(right, speed);
+  if (keysDown.has('KeyQ') || keysDown.has('ShiftLeft')) camera.position.y -= speed;
+  if (keysDown.has('KeyE') || keysDown.has('Space')) camera.position.y += speed;
+}
 
 // -- Render loop --
 function animate(): void {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
   mixer?.update(delta);
-  controls.update();
+  updateFreeCam(delta);
+  if (!freeCam) controls.update();
   renderer.render(scene, camera);
 }
 animate();

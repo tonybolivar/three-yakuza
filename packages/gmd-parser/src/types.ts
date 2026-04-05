@@ -71,11 +71,33 @@ export interface GMDVertexBuffer {
   readonly colors: Float32Array | null;
 }
 
+/** Texture slots in a GMD material. Indices into the GMD texture name table. -1 = unused. */
+export interface GMDTextureSlots {
+  /** Slot 0: diffuse/albedo (_di) */
+  readonly diffuse: number;
+  /** Slot 1: reflection/cubemap */
+  readonly reflection: number;
+  /** Slot 2: multi-map (_mt) — R=metallic, G=AO, B=glossiness */
+  readonly multi: number;
+  /** Slot 3: repeat multi (_rm) */
+  readonly repeatMulti: number;
+  /** Slot 4: toon/subsurface (_ts) */
+  readonly toonSub: number;
+  /** Slot 5: normal map (_tn) */
+  readonly normal: number;
+  /** Slot 6: repeat normal (_rt) */
+  readonly repeatNormal: number;
+  /** Slot 7: repeat diffuse (_rd) */
+  readonly repeatDiffuse: number;
+}
+
 /** Material properties (from the attribute + material structs). */
 export interface GMDMaterial {
   readonly index: number;
   readonly shaderIndex: number;
+  /** @deprecated Use textureSlots instead */
   readonly textureIndices: readonly number[];
+  readonly textureSlots: GMDTextureSlots;
   readonly diffuse: readonly [number, number, number];
   readonly specular: readonly [number, number, number];
   readonly opacity: number;

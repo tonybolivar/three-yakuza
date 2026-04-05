@@ -297,27 +297,23 @@ function buildScene(
       geometry.computeVertexNormals();
     }
 
-    // Find textures by role
+    // Find textures by slot position (not suffix guessing)
     let diffuseMap: Texture | undefined;
     let normalMap: Texture | undefined;
     let mtMap: Texture | undefined;
     if (matDef && textures && textures.size > 0) {
-      for (const texIdx of matDef.textureIndices) {
-        const texName = doc.textures[texIdx];
-        if (!texName) continue;
-        const texture = textures.get(texName) ?? textures.get(texName.toLowerCase());
-        if (!texture) { missing.add(texName); continue; }
-        matched.add(texName);
-        const suffix = getTextureSuffix(texName);
-        if (suffix === 'di' && !diffuseMap) diffuseMap = texture;
-        else if (suffix === 'tn' && !normalMap) normalMap = texture;
-        else if (suffix === 'mt' && !mtMap) mtMap = texture;
-      }
-    }
-
-    // Debug: log missing textures for eye/head meshes
-    if (missing.size > 0 && (shaderName.includes('[eye]') || shaderName.includes('[iris]'))) {
-      console.warn(`[GMD] attr_${attrIdx} (${shaderName}) missing textures:`, [...missing]);
+      const slots = matDef.textureSlots;
+      const lookup = (idx: number) => {
+        if (idx < 0) return undefined;
+        const name = doc.textures[idx];
+        if (!name) return undefined;
+        const tex = textures.get(name) ?? textures.get(name.toLowerCase());
+        if (tex) { matched.add(name); } else { missing.add(name); }
+        return tex;
+      };
+      diffuseMap = lookup(slots.diffuse);
+      normalMap = lookup(slots.normal);
+      mtMap = lookup(slots.multi);
     }
 
     // Material configuration based on shader type
@@ -373,13 +369,6 @@ function buildScene(
   }
 
   return root;
-}
-
-function getTextureSuffix(name: string): string {
-  const lower = name.toLowerCase();
-  if (lower.includes('nmap')) return 'nmap';
-  const match = /_([a-z]{2,3})$/.exec(lower);
-  return match?.[1] ?? '';
 }
 
 function expandTriangleStrip(

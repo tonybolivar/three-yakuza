@@ -289,20 +289,33 @@ function readMaterials(
     // Read texture slots: 8 × TextureIndexStruct (4 bytes each)
     // Layout: uint16 padding + int16 tex_index (-1 = unused)
     // Slots: [diffuse, refl, multi, rm, ts, normal, rt, rd]
+    const slotIndices: number[] = [];
     const textureIndices: number[] = [];
     for (let t = 0; t < 8; t++) {
       br.skip(2); // padding
       const texIdx = br.readInt16();
+      slotIndices.push(texIdx);
       if (texIdx >= 0) {
         textureIndices.push(texIdx);
       }
     }
+    const textureSlots = {
+      diffuse: slotIndices[0]!,
+      reflection: slotIndices[1]!,
+      multi: slotIndices[2]!,
+      repeatMulti: slotIndices[3]!,
+      toonSub: slotIndices[4]!,
+      normal: slotIndices[5]!,
+      repeatNormal: slotIndices[6]!,
+      repeatDiffuse: slotIndices[7]!,
+    };
 
     const rawMat = rawMaterials[materialIndex];
     materials.push({
       index: i,
       shaderIndex,
       textureIndices,
+      textureSlots,
       diffuse: rawMat?.diffuse ?? [1, 1, 1],
       specular: rawMat?.specular ?? [0, 0, 0],
       opacity: rawMat?.opacity ?? 1,
