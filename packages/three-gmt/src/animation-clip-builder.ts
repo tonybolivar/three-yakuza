@@ -69,9 +69,11 @@ export class GMTAnimationClipBuilder {
     const times: number[] = [];
     const values: number[] = [];
 
-    // Face GMT: position values are additive deltas — add rest position
-    const rest = this.isFaceGmt && this.boneRestPositions
-      ? this.boneRestPositions.get(boneName) ?? null
+    // Face GMT additive blending: only for actual animations (many keyframes),
+    // NOT for pose library snapshots (1-3 keyframes with absolute positions).
+    const isAdditiveAnim = this.isFaceGmt && this.boneRestPositions != null && merged.length > 3;
+    const rest = isAdditiveAnim
+      ? this.boneRestPositions!.get(boneName) ?? null
       : null;
 
     for (const kf of merged) {
