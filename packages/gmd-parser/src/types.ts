@@ -64,6 +64,7 @@ export interface GMDVertexBuffer {
   readonly bytesPerVertex: number;
   readonly positions: Float32Array;
   readonly normals: Float32Array | null;
+  readonly tangents: Float32Array | null;
   readonly uvs: Float32Array | null;
   readonly boneIndices: Uint8Array | null;
   readonly boneWeights: Float32Array | null;

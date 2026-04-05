@@ -134,6 +134,7 @@ export function extractVertexBuffer(
   // Find components
   const posComp = components.find(c => c.name === 'position');
   const normalComp = components.find(c => c.name === 'normal');
+  const tangentComp = components.find(c => c.name === 'tangent');
   const uv0Comp = components.find(c => c.name === 'uv0');
   const bonesComp = components.find(c => c.name === 'bones');
   const weightsComp = components.find(c => c.name === 'weights');
@@ -142,6 +143,7 @@ export function extractVertexBuffer(
   // Allocate output arrays
   const positions = new Float32Array(vertexCount * 3);
   const normals = normalComp ? new Float32Array(vertexCount * 3) : null;
+  const tangents = tangentComp ? new Float32Array(vertexCount * 4) : null;
   const uvs = uv0Comp ? new Float32Array(vertexCount * 2) : null;
   const boneIndices = bonesComp ? new Uint8Array(vertexCount * 4) : null;
   const boneWeights = weightsComp ? new Float32Array(vertexCount * 4) : null;
@@ -158,17 +160,32 @@ export function extractVertexBuffer(
       positions[v * 3 + 2] = vals[2]!;
     }
 
-    // Normal — renormalize after snorm8 unpacking to ensure unit length
+    // Normal — renormalize after snorm8 quantization. No negation needed.
     if (normalComp && normals) {
       const vals = readComponent(br, vertexStart + normalComp.offset, normalComp, littleEndian);
-      let nx = vals[0]!;
-      let ny = vals[1]!;
-      let nz = vals[2]!;
+      let nx = normalComp.format === 2 ? vals[0]! * 2 - 1 : vals[0]!;
+      let ny = normalComp.format === 2 ? vals[1]! * 2 - 1 : vals[1]!;
+      let nz = normalComp.format === 2 ? vals[2]! * 2 - 1 : vals[2]!;
       const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
       if (len > 0) { nx /= len; ny /= len; nz /= len; }
       normals[v * 3] = nx;
       normals[v * 3 + 1] = ny;
       normals[v * 3 + 2] = nz;
+    }
+
+    // Tangent — renormalize XYZ, keep W sign (handedness)
+    if (tangentComp && tangents) {
+      const vals = readComponent(br, vertexStart + tangentComp.offset, tangentComp, littleEndian);
+      let tx = tangentComp.format === 2 ? vals[0]! * 2 - 1 : vals[0]!;
+      let ty = tangentComp.format === 2 ? vals[1]! * 2 - 1 : vals[1]!;
+      let tz = tangentComp.format === 2 ? vals[2]! * 2 - 1 : vals[2]!;
+      const tw = tangentComp.format === 2 ? vals[3]! * 2 - 1 : vals[3]!;
+      const len = Math.sqrt(tx * tx + ty * ty + tz * tz);
+      if (len > 0) { tx /= len; ty /= len; tz /= len; }
+      tangents[v * 4] = tx;
+      tangents[v * 4 + 1] = ty;
+      tangents[v * 4 + 2] = tz;
+      tangents[v * 4 + 3] = tw < 0 ? -1 : 1;
     }
 
     // UV0
@@ -206,7 +223,7 @@ export function extractVertexBuffer(
     }
   }
 
-  return { index, vertexCount, bytesPerVertex, positions, normals, uvs, boneIndices, boneWeights, colors };
+  return { index, vertexCount, bytesPerVertex, positions, normals, tangents, uvs, boneIndices, boneWeights, colors };
 }
 
 function readComponent(br: BinaryReader, offset: number, comp: VertexComponent, _le: boolean): number[] {
