@@ -86,15 +86,16 @@ commonInput.addEventListener('change', () => {
   reader.readAsArrayBuffer(file);
 });
 
-// -- File loading --
-fileInput.addEventListener('change', () => {
-  const file = fileInput.files?.[0];
-  if (!file) return;
+// -- File loading (supports multi-select for texture PARs) --
+fileInput.addEventListener('change', async () => {
+  const files = fileInput.files;
+  if (!files || files.length === 0) return;
 
-  const ext = file.name.split('.').pop()?.toLowerCase();
-  const reader = new FileReader();
-  reader.onload = () => {
-    const buffer = reader.result as ArrayBuffer;
+  if (files.length === 1) {
+    // Single file — original behavior
+    const file = files[0]!;
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const buffer = await file.arrayBuffer();
     try {
       if (ext === 'par') {
         loadPAR(buffer, file.name);
@@ -109,8 +110,41 @@ fileInput.addEventListener('change', () => {
       infoEl.textContent = `Error: ${e instanceof Error ? e.message : String(e)}`;
       console.error(e);
     }
-  };
-  reader.readAsArrayBuffer(file);
+  } else {
+    // Multiple files — load texture PARs (tex*.par) first, then mesh.par last
+    const sorted = [...files].sort((a, b) => {
+      const aIsMesh = a.name.toLowerCase().includes('mesh');
+      const bIsMesh = b.name.toLowerCase().includes('mesh');
+      if (aIsMesh && !bIsMesh) return 1; // mesh last
+      if (!aIsMesh && bIsMesh) return -1;
+      return a.name.localeCompare(b.name);
+    });
+
+    // Load texture PARs into common texture map first
+    let texCount = 0;
+    for (const file of sorted) {
+      if (!file.name.toLowerCase().endsWith('.par')) continue;
+      if (file.name.toLowerCase().includes('mesh')) continue;
+      const buffer = await file.arrayBuffer();
+      texCount += loadDDSFromPAR(buffer, commonTextureMap);
+    }
+    if (texCount > 0) {
+      infoEl.textContent = `Loaded ${texCount} textures from ${sorted.length - 1} texture PARs.\nLoading model...`;
+    }
+
+    // Then load the mesh PAR (or first PAR if no mesh)
+    const meshFile = sorted.find(f => f.name.toLowerCase().includes('mesh'))
+      ?? sorted.find(f => f.name.toLowerCase().endsWith('.par'));
+    if (meshFile) {
+      try {
+        const buffer = await meshFile.arrayBuffer();
+        loadPAR(buffer, meshFile.name);
+      } catch (e) {
+        infoEl.textContent = `Error: ${e instanceof Error ? e.message : String(e)}`;
+        console.error(e);
+      }
+    }
+  }
 });
 
 // -- PAR: full pipeline --
