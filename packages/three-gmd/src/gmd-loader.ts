@@ -119,6 +119,16 @@ function buildScene(
   // Find the max node index - sub-meshes at this node are often hidden extras
   const maxNodeIndex = doc.meshes.reduce((max, m) => Math.max(max, m.nodeIndex), 0);
 
+  interface PendingMesh {
+    geometry: BufferGeometry;
+    material: ReturnType<typeof createSEGAMaterial>;
+    hasBones: boolean;
+    attrIdx: number;
+    layerDepth: number;
+    needsComputedNormals: boolean;
+  }
+  const pendingMeshes: PendingMesh[] = [];
+
   for (const [attrIdx, subMeshes] of meshesByAttr) {
     const matDef = doc.materials[attrIdx];
     const shaderName = matDef ? (doc.shaders[matDef.shaderIndex] ?? '') : '';
@@ -328,17 +338,26 @@ function buildScene(
       material.alphaTest = 0.5;
     }
 
+    pendingMeshes.push({ geometry, material, hasBones, attrIdx, layerDepth, needsComputedNormals });
+  }
+
+  // Smooth normals across mesh boundaries: vertices at the same position
+  // in different meshes get their normals averaged. This fixes seams at
+  // face/body, face/mouth, etc. boundaries.
+  smoothNormalsAcrossMeshes(pendingMeshes);
+
+  for (const pm of pendingMeshes) {
     let mesh3d: Mesh;
-    if (hasBones) {
-      const sm = new SkinnedMesh(geometry, material);
+    if (pm.hasBones) {
+      const sm = new SkinnedMesh(pm.geometry, pm.material);
       sm.bind(skeleton, new Matrix4());
       sm.frustumCulled = false;
       mesh3d = sm;
     } else {
-      mesh3d = new Mesh(geometry, material);
+      mesh3d = new Mesh(pm.geometry, pm.material);
     }
-    mesh3d.name = `attr_${attrIdx}`;
-    mesh3d.renderOrder = layerDepth;
+    mesh3d.name = `attr_${pm.attrIdx}`;
+    mesh3d.renderOrder = pm.layerDepth;
     root.add(mesh3d);
   }
 
@@ -375,6 +394,67 @@ function expandTriangleStrip(
     }
     a = b;
     b = c;
+  }
+}
+
+/**
+ * Smooth normals across mesh boundaries.
+ *
+ * Different attribute groups (face skin, body skin, mouth, etc.) are separate
+ * Three.js meshes. Vertices at their boundaries share positions but have
+ * independently computed normals, creating visible seams. This function
+ * averages normals at shared positions across all meshes that used
+ * computeVertexNormals().
+ */
+function smoothNormalsAcrossMeshes(meshes: { geometry: BufferGeometry; needsComputedNormals: boolean }[]): void {
+  // Build position → accumulated normal map across all computed-normal meshes
+  const normalAccum = new Map<string, { nx: number; ny: number; nz: number; count: number }>();
+  const computedMeshes = meshes.filter(m => m.needsComputedNormals);
+  if (computedMeshes.length < 2) return;
+
+  // Pass 1: accumulate normals by quantized position
+  for (const { geometry } of computedMeshes) {
+    const pos = geometry.getAttribute('position');
+    const nrm = geometry.getAttribute('normal');
+    if (!pos || !nrm) continue;
+    const pa = pos.array as Float32Array;
+    const na = nrm.array as Float32Array;
+    for (let i = 0; i < pos.count; i++) {
+      const key = `${Math.round(pa[i * 3]! * 1e4)},${Math.round(pa[i * 3 + 1]! * 1e4)},${Math.round(pa[i * 3 + 2]! * 1e4)}`;
+      const entry = normalAccum.get(key);
+      if (entry) {
+        entry.nx += na[i * 3]!;
+        entry.ny += na[i * 3 + 1]!;
+        entry.nz += na[i * 3 + 2]!;
+        entry.count++;
+      } else {
+        normalAccum.set(key, { nx: na[i * 3]!, ny: na[i * 3 + 1]!, nz: na[i * 3 + 2]!, count: 1 });
+      }
+    }
+  }
+
+  // Pass 2: write back averaged normals for boundary vertices (count > 1)
+  for (const { geometry } of computedMeshes) {
+    const pos = geometry.getAttribute('position');
+    const nrm = geometry.getAttribute('normal');
+    if (!pos || !nrm) continue;
+    const pa = pos.array as Float32Array;
+    const na = nrm.array as Float32Array;
+    let updated = false;
+    for (let i = 0; i < pos.count; i++) {
+      const key = `${Math.round(pa[i * 3]! * 1e4)},${Math.round(pa[i * 3 + 1]! * 1e4)},${Math.round(pa[i * 3 + 2]! * 1e4)}`;
+      const entry = normalAccum.get(key);
+      if (entry && entry.count > 1) {
+        const len = Math.sqrt(entry.nx * entry.nx + entry.ny * entry.ny + entry.nz * entry.nz);
+        if (len > 0) {
+          na[i * 3] = entry.nx / len;
+          na[i * 3 + 1] = entry.ny / len;
+          na[i * 3 + 2] = entry.nz / len;
+          updated = true;
+        }
+      }
+    }
+    if (updated) (nrm as BufferAttribute).needsUpdate = true;
   }
 }
 
