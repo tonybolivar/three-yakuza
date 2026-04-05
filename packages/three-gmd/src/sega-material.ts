@@ -33,8 +33,8 @@ const SEGA_NORMAL_FRAGMENT_MAPS = /* glsl */ `
 #ifdef USE_NORMALMAP_TANGENTSPACE
   vec4 _segaTn = texture2D( normalMap, vNormalMapUv );
   vec3 mapN;
-  mapN.x = 1.0 - 2.0 * _segaTn.a;
-  mapN.y = 1.0 - 2.0 * _segaTn.g;
+  mapN.x = 2.0 * _segaTn.a - 1.0;
+  mapN.y = 2.0 * _segaTn.g - 1.0;
   mapN.z = sqrt( max( 0.0, 1.0 - dot( mapN.xy, mapN.xy ) ) );
   mapN.xy *= normalScale;
   normal = normalize( tbn * mapN );
