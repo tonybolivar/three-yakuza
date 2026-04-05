@@ -222,8 +222,8 @@ function loadPAR(buffer: ArrayBuffer, filename: string): void {
 
         if (gmtResult.animations.length > 0 && totalClips <= gmtResult.animations.length) {
           if (gmtResult.document.isFaceGmt) {
-            // Face GMT positions are additive deltas — rest positions already baked in by builder
-            playClip(gmtResult.animations[0]!);
+            // Face GMT is a pose blend system — skip auto-play, needs proper blending
+            console.log('[GMT] Skipping face animation (pose system):', gmtResult.document.name);
           } else {
             playClip(gmtResult.animations[0]!);
           }

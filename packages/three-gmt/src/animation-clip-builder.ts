@@ -26,10 +26,8 @@ export class GMTAnimationClipBuilder {
     const tracks: KeyframeTrack[] = [];
 
     for (const [boneName, bone] of animation.bones) {
-      // Skip pose labels (no curves) and face GMT metadata bones
-      // that aren't in the skeleton (non, root, head, lip, param*, am_*)
+      // Skip entries with no curves (face GMT pose labels)
       if (bone.curves.length === 0) continue;
-      if (this.isFaceGmt && !boneName.startsWith('_')) continue;
 
       const locationCurves = bone.curves.filter(
         (c) => c.type === GMTCurveType.LOCATION,
@@ -69,20 +67,9 @@ export class GMTAnimationClipBuilder {
     const times: number[] = [];
     const values: number[] = [];
 
-    // Face GMT additive blending: only for actual animations (many keyframes),
-    // NOT for pose library snapshots (1-3 keyframes with absolute positions).
-    const isAdditiveAnim = this.isFaceGmt && this.boneRestPositions != null && merged.length > 3;
-    const rest = isAdditiveAnim
-      ? this.boneRestPositions!.get(boneName) ?? null
-      : null;
-
     for (const kf of merged) {
       times.push(kf.frame / frameRate);
-      if (rest) {
-        values.push(kf.x + rest[0], kf.y + rest[1], kf.z + rest[2]);
-      } else {
-        values.push(kf.x, kf.y, kf.z);
-      }
+      values.push(kf.x, kf.y, kf.z);
     }
 
     return new VectorKeyframeTrack(`${boneName}.position`, times, values);
