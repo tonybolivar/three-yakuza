@@ -46,10 +46,20 @@ export class GMTLoader extends Loader<GMTLoadResult> {
     );
   }
 
+  /**
+   * Set bone rest positions for face GMT additive blending.
+   * Call this after loading the model and before loading face GMT files.
+   */
+  setBoneRestPositions(positions: Map<string, [number, number, number]>): void {
+    this.builder.boneRestPositions = positions;
+  }
+
   /** Parse a GMT file from an ArrayBuffer. */
   parse(buffer: ArrayBuffer): GMTLoadResult {
     const document = parseGMT(buffer);
+    this.builder.isFaceGmt = document.isFaceGmt;
     const animations = this.builder.buildClips(document.animations);
+    this.builder.isFaceGmt = false;
     return { document, animations };
   }
 }

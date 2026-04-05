@@ -11,11 +11,23 @@ const infoEl = document.getElementById('info') as HTMLPreElement;
 const fileInput = document.getElementById('file-input') as HTMLInputElement;
 const commonInput = document.getElementById('common-input') as HTMLInputElement;
 
+// Animation panel elements
+const clipListEl = document.getElementById('clip-list') as HTMLUListElement;
+const clipListEmpty = document.getElementById('clip-list-empty') as HTMLDivElement;
+const btnPlay = document.getElementById('btn-play') as HTMLButtonElement;
+const btnStop = document.getElementById('btn-stop') as HTMLButtonElement;
+const scrubber = document.getElementById('scrubber') as HTMLInputElement;
+const timeDisplay = document.getElementById('time-display') as HTMLSpanElement;
+const speedSelect = document.getElementById('speed-select') as HTMLSelectElement;
+const btnRecord = document.getElementById('btn-record') as HTMLButtonElement;
+const btnPngSeq = document.getElementById('btn-png-seq') as HTMLButtonElement;
+const recordStatus = document.getElementById('record-status') as HTMLDivElement;
+
 // Shared texture map — common textures loaded first, character textures override
 const commonTextureMap = new Map<string, THREE.Texture>();
 
 // -- Three.js setup --
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.toneMapping = THREE.NoToneMapping;
@@ -51,6 +63,12 @@ scene.add(new THREE.GridHelper(10, 20, 0x333344, 0x222233));
 const clock = new THREE.Clock();
 let mixer: THREE.AnimationMixer | null = null;
 let modelScene: THREE.Group | null = null;
+
+// Animation panel state
+let loadedClips: THREE.AnimationClip[] = [];
+let currentAction: THREE.AnimationAction | null = null;
+let playbackSpeed = 1;
+let isScrubbing = false;
 
 const gmtLoader = new GMTLoader();
 const gmdLoader = new GMDLoader();
@@ -121,6 +139,8 @@ function loadPAR(buffer: ArrayBuffer, filename: string): void {
     clearScene();
     mixer = null;
     modelScene = null;
+    loadedClips = [];
+    currentAction = null;
   }
 
   // Build texture map: common textures as fallback, character textures override
@@ -151,6 +171,15 @@ function loadPAR(buffer: ArrayBuffer, filename: string): void {
     if (gmdResult.missingTextures.length > 0) {
       lines.push(`  Missing textures: ${gmdResult.missingTextures.join(', ')}`);
     }
+
+    // Extract bone rest positions for face GMT additive blending
+    const boneRestPositions = new Map<string, [number, number, number]>();
+    modelScene.traverse((obj) => {
+      if (obj.type === 'Bone') {
+        boneRestPositions.set(obj.name, [obj.position.x, obj.position.y, obj.position.z]);
+      }
+    });
+    gmtLoader.setBoneRestPositions(boneRestPositions);
     lines.push('');
 
     fitCamera(modelScene);
@@ -165,6 +194,7 @@ function loadPAR(buffer: ArrayBuffer, filename: string): void {
     }
 
     mixer = new THREE.AnimationMixer(target);
+    loadedClips = [];
     let totalClips = 0;
 
     for (const gmtEntry of gmtFiles) {
@@ -186,15 +216,16 @@ function loadPAR(buffer: ArrayBuffer, filename: string): void {
         }
 
         for (const clip of gmtResult.animations) {
+          loadedClips.push(clip);
           totalClips++;
         }
 
         if (gmtResult.animations.length > 0 && totalClips <= gmtResult.animations.length) {
           if (gmtResult.document.isFaceGmt) {
-            // Face GMT disabled — additive deltas distort face in bind pose
-            console.log('[GMT] Skipping face animation:', gmtResult.document.name);
+            // Face GMT positions are additive deltas — rest positions already baked in by builder
+            playClip(gmtResult.animations[0]!);
           } else {
-            mixer.clipAction(gmtResult.animations[0]!).play();
+            playClip(gmtResult.animations[0]!);
           }
         }
 
@@ -207,6 +238,7 @@ function loadPAR(buffer: ArrayBuffer, filename: string): void {
       }
     }
     lines.push('', `Total animation clips: ${totalClips}`);
+    refreshClipList();
   }
 
   if (gmdFiles.length === 0 && gmtFiles.length === 0) {
@@ -292,15 +324,14 @@ function loadGMT(buffer: ArrayBuffer, filename: string): void {
   })();
 
   mixer = new THREE.AnimationMixer(target);
+  loadedClips = [...result.animations];
+
   if (result.animations.length > 0) {
-    const action = mixer.clipAction(result.animations[0]!);
-    if (doc.isFaceGmt) {
-      action.blendMode = THREE.AdditiveAnimationBlendMode;
-    }
-    action.play();
+    playClip(result.animations[0]!, doc.isFaceGmt);
     lines.push('', modelScene ? 'Playing on loaded model.' : 'Playing standalone (no model loaded).');
   }
 
+  refreshClipList();
   infoEl.textContent = lines.join('\n');
 }
 
@@ -333,6 +364,9 @@ function loadGMD(buffer: ArrayBuffer, filename: string): void {
   scene.add(modelScene);
   fitCamera(modelScene);
   mixer = null;
+  loadedClips = [];
+  currentAction = null;
+  refreshClipList();
 }
 
 function loadGLB(buffer: ArrayBuffer, filename: string): void {
@@ -348,6 +382,9 @@ function loadGLB(buffer: ArrayBuffer, filename: string): void {
     scene.add(gltf.scene);
     fitCamera(gltf.scene);
     mixer = null;
+    loadedClips = [];
+    currentAction = null;
+    refreshClipList();
 
     let meshCount = 0;
     let vertCount = 0;
@@ -448,9 +485,12 @@ let freeCam = false;
 window.addEventListener('keydown', (e) => {
   keysDown.add(e.code);
 
-  if (e.code === 'Space') {
-    animPaused = !animPaused;
-    if (mixer) mixer.timeScale = animPaused ? 0 : 1;
+  if (e.code === 'Space' && !freeCam) {
+    if (mixer && currentAction) {
+      animPaused = !animPaused;
+      mixer.timeScale = animPaused ? 0 : playbackSpeed;
+      updatePlayButton();
+    }
   }
   if (e.code === 'Tab') {
     e.preventDefault();
@@ -515,6 +555,320 @@ function updateFreeCam(dt: number): void {
   if (keysDown.has('KeyE') || keysDown.has('Space')) camera.position.y += speed;
 }
 
+// ── Animation Panel Logic ──
+
+/** Play a specific clip, stopping any previous action */
+function playClip(clip: THREE.AnimationClip, additive = false): void {
+  if (!mixer) return;
+
+  // Stop all current actions
+  mixer.stopAllAction();
+
+  const action = mixer.clipAction(clip);
+  if (additive) {
+    action.blendMode = THREE.AdditiveAnimationBlendMode;
+  }
+  action.play();
+  currentAction = action;
+  animPaused = false;
+  mixer.timeScale = playbackSpeed;
+
+  // Update scrubber range
+  scrubber.max = String(clip.duration);
+  scrubber.value = '0';
+
+  // Highlight active clip in list
+  highlightActiveClip(clip);
+  updatePlayButton();
+}
+
+/** Refresh the clip list UI from loadedClips */
+function refreshClipList(): void {
+  clipListEl.innerHTML = '';
+  if (loadedClips.length === 0) {
+    clipListEmpty.style.display = '';
+    return;
+  }
+  clipListEmpty.style.display = 'none';
+
+  for (const clip of loadedClips) {
+    const li = document.createElement('li');
+    li.textContent = `${clip.name} (${clip.duration.toFixed(2)}s)`;
+    li.title = clip.name;
+    li.dataset.clipName = clip.name;
+    li.addEventListener('click', () => playClip(clip));
+    clipListEl.appendChild(li);
+  }
+
+  // Highlight current if any
+  if (currentAction) {
+    highlightActiveClip(currentAction.getClip());
+  }
+}
+
+/** Highlight the active clip in the list */
+function highlightActiveClip(clip: THREE.AnimationClip): void {
+  for (const li of clipListEl.children) {
+    (li as HTMLElement).classList.toggle('active', (li as HTMLElement).dataset.clipName === clip.name);
+  }
+}
+
+/** Update the play/pause button icon */
+function updatePlayButton(): void {
+  btnPlay.innerHTML = animPaused ? '&#9654;' : '&#9646;&#9646;';
+}
+
+// Play / Pause
+btnPlay.addEventListener('click', () => {
+  if (!mixer || !currentAction) return;
+  animPaused = !animPaused;
+  mixer.timeScale = animPaused ? 0 : playbackSpeed;
+  updatePlayButton();
+});
+
+// Stop (reset to bind pose)
+btnStop.addEventListener('click', () => {
+  if (!mixer) return;
+  mixer.stopAllAction();
+  currentAction = null;
+  animPaused = false;
+  scrubber.value = '0';
+  timeDisplay.textContent = '0.00 / 0.00';
+  updatePlayButton();
+
+  // Reset all bones to bind pose by updating mixer at time 0 with no actions
+  // (stopAllAction already does this for skinned meshes)
+});
+
+// Speed selector
+speedSelect.addEventListener('change', () => {
+  playbackSpeed = parseFloat(speedSelect.value);
+  if (mixer && !animPaused) {
+    mixer.timeScale = playbackSpeed;
+  }
+});
+
+// Scrubber drag
+scrubber.addEventListener('input', () => {
+  if (!mixer || !currentAction) return;
+  isScrubbing = true;
+  const t = parseFloat(scrubber.value);
+  // Pause while scrubbing, set time directly
+  mixer.timeScale = 0;
+  currentAction.time = t;
+  mixer.update(0); // force update at current time
+});
+
+scrubber.addEventListener('change', () => {
+  isScrubbing = false;
+  if (mixer && !animPaused) {
+    mixer.timeScale = playbackSpeed;
+  }
+});
+
+// ── Recording Logic (WebM via MediaRecorder) ──
+
+let mediaRecorder: MediaRecorder | null = null;
+let recordedChunks: Blob[] = [];
+
+btnRecord.addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    // Stop recording
+    mediaRecorder.stop();
+    return;
+  }
+
+  // Start recording
+  const stream = canvas.captureStream(30);
+  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+    ? 'video/webm;codecs=vp9'
+    : 'video/webm';
+
+  mediaRecorder = new MediaRecorder(stream, { mimeType });
+  recordedChunks = [];
+
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) recordedChunks.push(e.data);
+  };
+
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `animation-${Date.now()}.webm`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    btnRecord.textContent = 'Record WebM';
+    btnRecord.classList.remove('recording');
+    recordStatus.textContent = `Saved ${(blob.size / 1024).toFixed(0)} KB`;
+    btnPngSeq.disabled = false;
+  };
+
+  mediaRecorder.start();
+  btnRecord.textContent = 'Stop Recording';
+  btnRecord.classList.add('recording');
+  recordStatus.textContent = 'Recording...';
+  btnPngSeq.disabled = true;
+});
+
+// ── PNG Sequence Export ──
+
+let pngExporting = false;
+
+btnPngSeq.addEventListener('click', async () => {
+  if (!mixer || !currentAction || pngExporting) return;
+
+  const clip = currentAction.getClip();
+  const fps = 15;
+  const totalFrames = Math.ceil(clip.duration * fps);
+  if (totalFrames <= 0 || totalFrames > 600) {
+    recordStatus.textContent = totalFrames > 600
+      ? 'Clip too long (>40s at 15fps)'
+      : 'No frames to export';
+    return;
+  }
+
+  pngExporting = true;
+  btnPngSeq.disabled = true;
+  btnRecord.disabled = true;
+  recordStatus.textContent = `Exporting 0/${totalFrames} frames...`;
+
+  // Pause normal playback, manually step through frames
+  const wasPaused = animPaused;
+  const wasTimeScale = mixer.timeScale;
+  mixer.timeScale = 0;
+
+  const blobs: Blob[] = [];
+
+  for (let i = 0; i < totalFrames; i++) {
+    const t = (i / fps);
+    currentAction.time = t;
+    mixer.update(0);
+    renderer.render(scene, camera);
+
+    const blob = await new Promise<Blob>((resolve) => {
+      canvas.toBlob((b) => resolve(b!), 'image/png');
+    });
+    blobs.push(blob);
+    recordStatus.textContent = `Exporting ${i + 1}/${totalFrames} frames...`;
+  }
+
+  // Restore playback state
+  mixer.timeScale = wasPaused ? 0 : wasTimeScale;
+
+  // Bundle all PNGs into a store-only ZIP (no external deps)
+  const zipBlob = await buildZip(blobs, clip.name, fps);
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${clip.name.replace(/[^a-zA-Z0-9_-]/g, '_')}-png-sequence.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  recordStatus.textContent = `Exported ${totalFrames} PNG frames (${(zipBlob.size / 1024).toFixed(0)} KB)`;
+  pngExporting = false;
+  btnPngSeq.disabled = false;
+  btnRecord.disabled = false;
+});
+
+/** Build a minimal ZIP file from an array of PNG blobs. No compression (store only). */
+async function buildZip(blobs: Blob[], baseName: string, fps: number): Promise<Blob> {
+  const entries: { name: Uint8Array; data: Uint8Array; }[] = [];
+  const encoder = new TextEncoder();
+
+  for (let i = 0; i < blobs.length; i++) {
+    const fileName = `${baseName}_${String(i).padStart(4, '0')}.png`;
+    const data = new Uint8Array(await blobs[i]!.arrayBuffer());
+    entries.push({ name: encoder.encode(fileName), data });
+  }
+
+  // Build ZIP structure
+  const parts: Uint8Array[] = [];
+  const centralDir: Uint8Array[] = [];
+  let offset = 0;
+
+  for (const entry of entries) {
+    // Local file header
+    const localHeader = new Uint8Array(30 + entry.name.length);
+    const lv = new DataView(localHeader.buffer);
+    lv.setUint32(0, 0x04034b50, true);   // signature
+    lv.setUint16(4, 20, true);            // version needed
+    lv.setUint16(6, 0, true);             // flags
+    lv.setUint16(8, 0, true);             // compression (store)
+    lv.setUint16(10, 0, true);            // mod time
+    lv.setUint16(12, 0, true);            // mod date
+    lv.setUint32(14, crc32(entry.data), true); // crc32
+    lv.setUint32(18, entry.data.length, true); // compressed size
+    lv.setUint32(22, entry.data.length, true); // uncompressed size
+    lv.setUint16(26, entry.name.length, true); // filename length
+    lv.setUint16(28, 0, true);             // extra field length
+    localHeader.set(entry.name, 30);
+
+    // Central directory entry
+    const cdEntry = new Uint8Array(46 + entry.name.length);
+    const cv = new DataView(cdEntry.buffer);
+    cv.setUint32(0, 0x02014b50, true);   // signature
+    cv.setUint16(4, 20, true);            // version made by
+    cv.setUint16(6, 20, true);            // version needed
+    cv.setUint16(8, 0, true);             // flags
+    cv.setUint16(10, 0, true);            // compression
+    cv.setUint16(12, 0, true);            // mod time
+    cv.setUint16(14, 0, true);            // mod date
+    cv.setUint32(16, crc32(entry.data), true);
+    cv.setUint32(20, entry.data.length, true);
+    cv.setUint32(24, entry.data.length, true);
+    cv.setUint16(28, entry.name.length, true);
+    cv.setUint16(30, 0, true);            // extra field length
+    cv.setUint16(32, 0, true);            // comment length
+    cv.setUint16(34, 0, true);            // disk number
+    cv.setUint16(36, 0, true);            // internal attrs
+    cv.setUint32(38, 0, true);            // external attrs
+    cv.setUint32(42, offset, true);       // local header offset
+    cdEntry.set(entry.name, 46);
+
+    parts.push(localHeader, entry.data);
+    centralDir.push(cdEntry);
+    offset += localHeader.length + entry.data.length;
+  }
+
+  // Central directory
+  const cdOffset = offset;
+  let cdSize = 0;
+  for (const cd of centralDir) {
+    parts.push(cd);
+    cdSize += cd.length;
+  }
+
+  // End of central directory
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);               // disk number
+  ev.setUint16(6, 0, true);               // disk with cd
+  ev.setUint16(8, entries.length, true);   // entries on disk
+  ev.setUint16(10, entries.length, true);  // total entries
+  ev.setUint32(12, cdSize, true);          // cd size
+  ev.setUint32(16, cdOffset, true);        // cd offset
+  ev.setUint16(20, 0, true);              // comment length
+  parts.push(eocd);
+
+  return new Blob(parts as unknown as BlobPart[], { type: 'application/zip' });
+}
+
+/** CRC-32 (used by ZIP format) */
+function crc32(data: Uint8Array): number {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) {
+    crc ^= data[i]!;
+    for (let j = 0; j < 8; j++) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xEDB88320 : 0);
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
 // -- Render loop --
 function animate(): void {
   requestAnimationFrame(animate);
@@ -523,6 +877,14 @@ function animate(): void {
   updateFreeCam(delta);
   if (!freeCam) controls.update();
   renderer.render(scene, camera);
+
+  // Update scrubber and time display
+  if (currentAction && !isScrubbing) {
+    const clip = currentAction.getClip();
+    const t = currentAction.time % clip.duration;
+    scrubber.value = String(t);
+    timeDisplay.textContent = `${t.toFixed(2)} / ${clip.duration.toFixed(2)}`;
+  }
 }
 animate();
 

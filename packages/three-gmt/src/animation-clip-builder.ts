@@ -11,6 +11,16 @@ import type { GMTAnimation, GMTCurve } from '@three-yakuza/gmt-parser';
 import { GMTCurveType, GMTCurveChannel } from '@three-yakuza/gmt-parser';
 
 export class GMTAnimationClipBuilder {
+  /**
+   * Bone rest positions for face GMT additive position blending.
+   * Face GMT positions are tiny deltas that must be added to rest positions.
+   * Map from bone name to [x, y, z].
+   */
+  boneRestPositions: Map<string, [number, number, number]> | null = null;
+
+  /** Whether current clips are face GMT (positions are additive deltas). */
+  isFaceGmt = false;
+
   /** Convert a single GMTAnimation to a Three.js AnimationClip. */
   buildClip(animation: GMTAnimation): AnimationClip {
     const tracks: KeyframeTrack[] = [];
@@ -54,9 +64,18 @@ export class GMTAnimationClipBuilder {
     const times: number[] = [];
     const values: number[] = [];
 
+    // Face GMT: position values are additive deltas — add rest position
+    const rest = this.isFaceGmt && this.boneRestPositions
+      ? this.boneRestPositions.get(boneName) ?? null
+      : null;
+
     for (const kf of merged) {
       times.push(kf.frame / frameRate);
-      values.push(kf.x, kf.y, kf.z);
+      if (rest) {
+        values.push(kf.x + rest[0], kf.y + rest[1], kf.z + rest[2]);
+      } else {
+        values.push(kf.x, kf.y, kf.z);
+      }
     }
 
     return new VectorKeyframeTrack(`${boneName}.position`, times, values);
