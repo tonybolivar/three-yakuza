@@ -6,7 +6,7 @@ Use [Yakuza / Like a Dragon](https://rggstudio.sega.com/) assets in [three.js](h
 
 ![Viewer Screenshot](docs/media/viewer-screenshot.png)
 
-> **Early development** -- This project is a work in progress. Model rendering has known issues including facial shading artifacts, missing material features, and incomplete facial animation blending. Contributions welcome!
+> **Early development** -- This project is a work in progress. Model rendering has known issues including facial shading artifacts, missing material features, incomplete facial animation blending, and a plenthora of other things I probably didn't notice. Contributions welcome!
 
 ## What is this?
 
