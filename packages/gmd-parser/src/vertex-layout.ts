@@ -104,6 +104,13 @@ export function parseVertexLayout(flagsLow: number, flagsHigh: number, bytesPerV
     }
   }
 
+  if (offset !== bytesPerVertex) {
+    console.warn(
+      `[GMD] Vertex layout stride mismatch: computed ${offset} bytes, expected ${bytesPerVertex}.`,
+      `flagsLow=0x${flagsLow.toString(16)}, flagsHigh=0x${flagsHigh.toString(16)}`,
+      components.map(c => `${c.name}@${c.offset}(fmt${c.format}×${c.count})`).join(', '),
+    );
+  }
   return { components, bytesPerVertex };
 }
 

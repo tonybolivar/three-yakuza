@@ -110,7 +110,8 @@ function buildScene(
   // Group sub-meshes by attribute - one merged geometry per attribute
   const meshesByAttr = new Map<number, typeof doc.meshes[number][]>();
   for (const meshDef of doc.meshes) {
-    if (meshDef.triangleListCount === 0) continue;
+    if (meshDef.triangleListCount === 0 && meshDef.resetStripCount === 0
+      && meshDef.noResetStripCount === 0) continue;
     const list = meshesByAttr.get(meshDef.attributeIndex) ?? [];
     list.push(meshDef);
     meshesByAttr.set(meshDef.attributeIndex, list);
@@ -223,6 +224,31 @@ function buildScene(
                 allSkinIndices[outIdx * 4 + j] = doc.meshMatrixList[mlOffset + 1 + localIdx]!;
               }
               allSkinWeights[outIdx * 4 + j] = weight;
+            }
+          }
+        }
+        // Vertices with all-zero weights spike to origin in Three.js skinning
+        // shader.  Bind them to their sub-mesh's node bone so they follow the
+        // node transform instead (matches game engine behavior for rigid parts).
+        // Gap vertices (from shared VBs) won't match any sub-mesh — bind to
+        // the first sub-mesh's node as a safe default.
+        if (hasBones) {
+          const fallbackNode = filtered[0]!.nodeIndex;
+          for (let outIdx = 0; outIdx < globalVCount; outIdx++) {
+            const base = outIdx * 4;
+            if (allSkinWeights[base] === 0 && allSkinWeights[base + 1] === 0
+              && allSkinWeights[base + 2] === 0 && allSkinWeights[base + 3] === 0) {
+              const v = outIdx + globalVStart;
+              let bound = false;
+              for (const meshDef of filtered) {
+                if (v >= meshDef.minIndex && v < meshDef.minIndex + meshDef.vertexCount) {
+                  allSkinIndices[base] = meshDef.nodeIndex;
+                  bound = true;
+                  break;
+                }
+              }
+              if (!bound) allSkinIndices[base] = fallbackNode;
+              allSkinWeights[base] = 1.0;
             }
           }
         }
