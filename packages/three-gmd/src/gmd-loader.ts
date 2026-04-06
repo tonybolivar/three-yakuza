@@ -334,7 +334,9 @@ function buildScene(
       color: matDef ? new Color(matDef.diffuse[0], matDef.diffuse[1], matDef.diffuse[2]) : 0x888888,
       opacity,
       transparent: isTransparent,
-      vertexColors: hasColors,
+      // Face/skin shaders: game ignores vertex RGB (often stored as 0,0,0),
+      // but Three.js would multiply them in, turning the face black.
+      vertexColors: hasColors && !needsComputedNormals,
       layerDepth,
       ...(needsDoubleSide ? { side: 2 } : {}), // 2 = DoubleSide
     });
