@@ -156,7 +156,7 @@ Common SEGA bone names: `center_c_n`, `kosi_c_n`, `mune_c_n`, `kubi_c_n`, `face_
 Parser logic ported from:
 
 - [`gmt_lib`](https://github.com/SutandoTsukai181/gmt_lib) by SutandoTsukai181 - GMT/CMT/IFA parsing
-- (ParManager) by Kaplas80 - PAR archive unpacking
+- [`ParManager`](https://github.com/Kaplas80/ParManager) by Kaplas80 - PAR archive unpacking
 - [`yk_gmd_io`](https://github.com/theturboturnip/yk_gmd_io) by theturboturnip - GMD model parsing
 
 Texture format documentation from the Yakuza modding community.
